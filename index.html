@@ -1,0 +1,1859 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>차량 관리 프로그램</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', 'Noto Sans KR', sans-serif; }
+        .modal-bg { background-color: rgba(0,0,0,0.5); display: flex; }
+        .calendar-grid {
+            display: grid;
+            /* grid-template-columns is set dynamically via inline style */
+            gap: 1px;
+        }
+        .progress-bar-container {
+            position: relative;
+            height: 100%;
+            width: 100%;
+        }
+        .progress-bar {
+            position: absolute;
+            height: 24px;
+            border-radius: 4px;
+            overflow: hidden;
+            white-space: nowrap;
+            color: white;
+            padding: 2px 8px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease-in-out;
+            z-index: 5; /* Ensure progress bar is on top of other cells */
+        }
+        .progress-bar:hover {
+            transform: scale(1.02);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+        /* Tooltip styles are now handled by the global tooltip div */
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        @keyframes scale-in {
+            from { transform: scale(0.9); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
+        .animate-scale-in { animation: scale-in 0.2s ease-out forwards; }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+
+    <!-- 로그인 화면 -->
+    <div id="login-screen" class="min-h-screen flex items-center justify-center bg-gray-900">
+        <div class="bg-white p-8 rounded-lg shadow-2xl w-full max-w-md">
+            <h1 class="text-3xl font-bold mb-2 text-center text-gray-800">차량 관리 시스템</h1>
+            <p class="text-gray-500 mb-6 text-center">로그인이 필요합니다.</p>
+            <div id="login-error" class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4 hidden" role="alert">
+                <span class="block sm:inline">ID 또는 비밀번호가 잘못되었습니다.</span>
+            </div>
+            <div class="space-y-4">
+                <input id="username" type="text" placeholder="아이디" class="w-full px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <input id="password" type="password" placeholder="비밀번호" class="w-full px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <button id="login-btn" class="w-full bg-blue-600 text-white py-3 rounded-md font-semibold hover:bg-blue-700 transition-colors">로그인</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 메인 앱 화면 -->
+    <div id="main-app" class="hidden">
+        <header class="bg-white shadow-md p-4 flex justify-between items-center sticky top-0 z-20">
+            <h1 class="text-2xl font-bold text-gray-800">차량 운행 관리</h1>
+            <div class="flex items-center space-x-2">
+                <span id="current-user-display" class="text-sm font-medium"></span>
+                <button id="activity-log-btn" class="px-3 py-2 text-xs font-medium text-center text-white bg-slate-600 rounded-lg hover:bg-slate-700 focus:ring-4 focus:outline-none focus:ring-slate-300">활동 로그</button>
+                <button id="change-pw-btn" class="px-3 py-2 text-xs font-medium text-center text-white bg-gray-600 rounded-lg hover:bg-gray-700 focus:ring-4 focus:outline-none focus:ring-gray-300">비밀번호 변경</button>
+                <button id="logout-btn" class="px-3 py-2 text-xs font-medium text-center text-white bg-red-600 rounded-lg hover:bg-red-700 focus:ring-4 focus:outline-none focus:ring-red-300">로그아웃</button>
+                <button id="user-mgmt-btn" class="px-3 py-2 text-xs font-medium text-center text-white bg-purple-600 rounded-lg hover:bg-purple-700 focus:ring-4 focus:outline-none focus:ring-purple-300">계정 관리</button>
+                <button id="vehicle-db-mgmt-btn" class="px-3 py-2 text-xs font-medium text-center text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 focus:ring-4 focus:outline-none focus:ring-indigo-300">차량 DB 관리</button>
+                <button id="driving-log-mgmt-btn" class="px-3 py-2 text-xs font-medium text-center text-white bg-teal-600 rounded-lg hover:bg-teal-700 focus:ring-4 focus:outline-none focus:ring-teal-300">운행일지 관리</button>
+                <button id="schedule-mgmt-btn" class="px-3 py-2 text-xs font-medium text-center text-white bg-sky-600 rounded-lg hover:bg-sky-700 focus:ring-4 focus:outline-none focus:ring-sky-300">운행현황 관리</button>
+                <button id="save-all-btn" class="px-3 py-2 text-xs font-medium text-center text-white bg-green-600 rounded-lg hover:bg-green-700 focus:ring-4 focus:outline-none focus:ring-green-300">전체 저장</button>
+                <label for="load-all-input" class="cursor-pointer px-3 py-2 text-xs font-medium text-center text-white bg-yellow-500 rounded-lg hover:bg-yellow-600 focus:ring-4 focus:outline-none focus:ring-yellow-300">전체 불러오기</label>
+                <input type="file" id="load-all-input" class="hidden" accept=".json">
+            </div>
+        </header>
+
+        <main class="p-4 md:p-6 lg:p-8 space-y-6">
+            <!-- 차량 사용현황 신호등 -->
+            <section id="traffic-light-section">
+                <h2 class="text-xl font-semibold mb-3">차량 사용현황</h2>
+                <div id="traffic-light-status" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-4">
+                    <!-- 신호등 아이템 템플릿 -->
+                </div>
+            </section>
+
+            <!-- 차량별 운행 현황 -->
+            <section>
+                <div class="flex justify-between items-center mb-3">
+                     <h2 class="text-xl font-semibold">차량별 운행 현황</h2>
+                    <div class="flex items-center space-x-2">
+                        <button id="prev-month-btn" class="px-3 py-1 bg-white border rounded-md shadow-sm">&lt;</button>
+                        <span id="current-month-display" class="text-lg font-medium w-28 text-center"></span>
+                        <button id="next-month-btn" class="px-3 py-1 bg-white border rounded-md shadow-sm">&gt;</button>
+                    </div>
+                </div>
+                <div class="bg-white p-4 rounded-lg shadow-md overflow-x-auto no-scrollbar">
+                    <div id="calendar-view" class="min-w-max">
+                        <!-- 가로 달력 템플릿 -->
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- 각종 모달 -->
+    <!-- (다른 모달들은 여기에 위치) -->
+    <div id="schedule-modal" class="fixed inset-0 modal-bg items-center justify-center z-30 hidden">
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-lg p-6 space-y-4 animate-scale-in">
+            <h2 id="schedule-modal-title" class="text-2xl font-bold">일정 등록</h2>
+            <form id="schedule-form" class="space-y-4">
+                <input type="hidden" id="schedule-id">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">차량</label>
+                    <select id="schedule-vehicle" required class="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"></select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">제목</label>
+                    <input type="text" id="schedule-title" required class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">시작일</label>
+                        <input type="date" id="schedule-start-date" required class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">종료일</label>
+                        <input type="date" id="schedule-end-date" required class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">사용형태</label>
+                        <select id="schedule-type" required class="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                            <option>시험</option>
+                            <option>대여</option>
+                            <option>출장</option>
+                            <option>정비</option>
+                            <option>고장</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 flex justify-between">
+                            <span>사용부서</span>
+                            <button type="button" id="manage-departments-btn" class="text-xs text-blue-500 hover:underline">부서 관리</button>
+                        </label>
+                        <select id="schedule-department" required class="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"></select>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">운전자 (필수)</label>
+                        <input type="text" id="schedule-driver" required class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">요청자 (선택)</label>
+                        <input type="text" id="schedule-requester" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                    </div>
+                </div>
+                <div class="flex items-center">
+                    <input id="schedule-load-status" type="checkbox" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded">
+                    <label for="schedule-load-status" class="ml-2 block text-sm text-gray-900">적차</label>
+                </div>
+                <div class="flex justify-end space-x-2 pt-2">
+                    <button type="button" id="delete-schedule-btn" class="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 hidden">삭제</button>
+                    <button type="button" id="cancel-schedule-btn" class="bg-gray-200 text-gray-800 px-4 py-2 rounded-md hover:bg-gray-300">취소</button>
+                    <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700">저장</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <div id="department-modal" class="fixed inset-0 modal-bg items-center justify-center z-40 hidden">
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-md p-6 space-y-4">
+            <h2 class="text-2xl font-bold">부서 관리</h2>
+            <div id="department-list" class="space-y-2 max-h-60 overflow-y-auto">
+            </div>
+            <div class="flex space-x-2">
+                <input type="text" id="new-department-name" placeholder="새 부서명" class="flex-grow border border-gray-300 rounded-md py-2 px-3">
+                <input type="color" id="new-department-color" value="#4F46E5" class="w-10 h-10 border-none rounded-md cursor-pointer">
+                <button id="add-department-btn" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700">추가</button>
+            </div>
+             <div class="flex justify-end pt-2">
+                <button id="close-department-modal-btn" class="bg-gray-200 text-gray-800 px-4 py-2 rounded-md hover:bg-gray-300">닫기</button>
+            </div>
+        </div>
+    </div>
+    
+    <div id="vehicle-db-modal" class="fixed inset-0 modal-bg items-center justify-center z-30 hidden p-4">
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-6xl p-6 flex flex-col h-full">
+            <h2 class="text-2xl font-bold mb-4">차량 DB 관리 메뉴</h2>
+            <div class="flex items-center space-x-2 mb-4">
+                <button id="add-vehicle-btn" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700">차량 등록</button>
+                <button id="export-selected-vehicle-btn" class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700">선택 내보내기</button>
+                <button id="export-all-vehicle-btn" class="bg-green-700 text-white px-4 py-2 rounded-md hover:bg-green-800">모두 내보내기</button>
+                <label for="import-vehicle-input" class="cursor-pointer bg-yellow-500 text-white px-4 py-2 rounded-md hover:bg-yellow-600">불러오기</label>
+                <input type="file" id="import-vehicle-input" class="hidden" accept=".json">
+                <button id="delete-selected-vehicle-btn" class="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700">선택 삭제</button>
+            </div>
+            <div class="flex-grow overflow-y-auto border rounded-lg">
+                <table class="w-full text-sm text-left text-gray-500">
+                    <thead class="text-xs text-gray-700 uppercase bg-gray-50 sticky top-0">
+                        <tr>
+                            <th scope="col" class="p-4"><input type="checkbox" id="select-all-vehicles"></th>
+                            <th scope="col" class="px-6 py-3">차량명</th>
+                            <th scope="col" class="px-6 py-3">엔진</th>
+                            <th scope="col" class="px-6 py-3">TM</th>
+                            <th scope="col" class="px-6 py-3">GVW(kg)</th>
+                            <th scope="col" class="px-6 py-3">R.Axle(ton)</th>
+                            <th scope="col" class="px-6 py-3">등록일</th>
+                            <th scope="col" class="px-6 py-3">수정일</th>
+                        </tr>
+                    </thead>
+                    <tbody id="vehicle-db-list">
+                    </tbody>
+                </table>
+            </div>
+            <div class="flex justify-end pt-4">
+                <button id="close-vehicle-db-modal-btn" class="bg-gray-200 text-gray-800 px-4 py-2 rounded-md hover:bg-gray-300">닫기</button>
+            </div>
+        </div>
+    </div>
+    
+    <div id="vehicle-form-modal" class="fixed inset-0 modal-bg items-center justify-center z-40 hidden p-4">
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-4xl p-6 h-full flex flex-col">
+            <h2 id="vehicle-form-title" class="text-2xl font-bold mb-4">차량 등록</h2>
+            <form id="vehicle-form" class="flex-grow overflow-y-auto space-y-4 pr-2">
+                <input type="hidden" id="vehicle-id">
+                 <div class="text-right">
+                    <button type="button" id="load-from-existing-btn" class="bg-teal-500 text-white px-3 py-1 text-sm rounded-md hover:bg-teal-600">기존 차량에서 불러오기</button>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
+                    <div class="p-3 border rounded-md">
+                        <h3 class="font-semibold text-base mb-2">기본 정보</h3>
+                        <label class="block">차량명: <input type="text" name="차량명" required class="mt-1 w-full border-gray-300 rounded-md shadow-sm"></label>
+                        <label class="block mt-2">PO: <input type="text" name="PO" class="mt-1 w-full border-gray-300 rounded-md shadow-sm"></label>
+                        <label class="block mt-2">Vehicle Information Number: <input type="text" name="Vehicle Information Number" class="mt-1 w-full border-gray-300 rounded-md shadow-sm"></label>
+                        <label class="block mt-2">분류코드: <input type="text" name="분류코드" class="mt-1 w-full border-gray-300 rounded-md shadow-sm"></label>
+                        <label class="block mt-2">Cab Model(Color Code): <input type="text" name="Cab Model" class="mt-1 w-full border-gray-300 rounded-md shadow-sm"></label>
+                    </div>
+
+                    <div class="p-3 border rounded-md">
+                        <h3 class="font-semibold text-base mb-2">Overall (mm)</h3>
+                        <label class="block">Length: <input type="number" name="Overall_Length" class="mt-1 w-full border-gray-300 rounded-md shadow-sm"></label>
+                        <label class="block mt-2">Width: <input type="number" name="Overall_Width" class="mt-1 w-full border-gray-300 rounded-md shadow-sm"></label>
+                        <label class="block mt-2">Height: <input type="number" name="Overall_Height" class="mt-1 w-full border-gray-300 rounded-md shadow-sm"></label>
+                    </div>
+
+                    <div class="p-3 border rounded-md">
+                        <h3 class="font-semibold text-base mb-2">Wheel Base (mm)</h3>
+                        <label class="block">1st: <input type="number" name="Wheel Base_1st" class="mt-1 w-full border-gray-300 rounded-md shadow-sm"></label>
+                    </div>
+                    
+                    <div class="p-3 border rounded-md">
+                         <h3 class="font-semibold text-base mb-2">Wheel Tread (mm)</h3>
+                        <label class="block">Front: <input type="number" name="Wheel Tread_Front" class="mt-1 w-full border-gray-300 rounded-md shadow-sm"></label>
+                        <label class="block mt-2">Rear: <input type="number" name="Wheel Tread_Rear" class="mt-1 w-full border-gray-300 rounded-md shadow-sm"></label>
+                    </div>
+                    
+                    <div class="p-3 border rounded-md">
+                        <h3 class="font-semibold text-base mb-2">Over-Hang (mm)</h3>
+                        <label class="block">Front: <input type="number" name="Over-Hang_Front" class="mt-1 w-full border-gray-300 rounded-md shadow-sm"></label>
+                        <label class="block mt-2">Rear: <input type="number" name="Over-Hang_Rear" class="mt-1 w-full border-gray-300 rounded-md shadow-sm"></label>
+                    </div>
+
+                    <div class="p-3 border rounded-md">
+                        <h3 class="font-semibold text-base mb-2">Deck or Coupler (mm)</h3>
+                        <label class="block">Length: <input type="number" name="Deck_Length" class="mt-1 w-full border-gray-300 rounded-md shadow-sm"></label>
+                        <label class="block mt-2">Width: <input type="number" name="Deck_Width" class="mt-1 w-full border-gray-300 rounded-md shadow-sm"></label>
+                        <label class="block mt-2">Height: <input type="number" name="Deck_Height" class="mt-1 w-full border-gray-300 rounded-md shadow-sm"></label>
+                        <label class="block mt-2">Off-Set: <input type="number" name="Deck_Off-Set" class="mt-1 w-full border-gray-300 rounded-md shadow-sm"></label>
+                    </div>
+
+                    <div class="p-3 border rounded-md">
+                        <h3 class="font-semibold text-base mb-2">Weight(kg)</h3>
+                        <label class="block">Front: <input type="number" name="Weight_Front" class="mt-1 w-full border-gray-300 rounded-md shadow-sm"></label>
+                        <label class="block mt-2">Rear: <input type="number" name="Weight_Rear" class="mt-1 w-full border-gray-300 rounded-md shadow-sm"></label>
+                        <label class="block mt-2">Curb Weight: <input type="number" name="Weight_Curb" class="mt-1 w-full border-gray-300 rounded-md shadow-sm"></label>
+                        <label class="block mt-2">Pay-load: <input type="number" name="Weight_Payload" class="mt-1 w-full border-gray-300 rounded-md shadow-sm"></label>
+                        <label class="block mt-2">G.V.W: <input type="number" name="Weight_GVW" class="mt-1 w-full border-gray-300 rounded-md shadow-sm"></label>
+                    </div>
+
+                    <div class="p-3 border rounded-md">
+                        <h3 class="font-semibold text-base mb-2">Engine</h3>
+                        <label class="block">Emission: <input type="text" name="Engine_Emission" class="mt-1 w-full border-gray-300 rounded-md shadow-sm"></label>
+                        <label class="block mt-2">Model: <input type="text" name="Engine_Model" class="mt-1 w-full border-gray-300 rounded-md shadow-sm"></label>
+                        <label class="block mt-2">MAX Power(PS/rpm): <input type="text" name="Engine_MAX_Power" class="mt-1 w-full border-gray-300 rounded-md shadow-sm"></label>
+                        <label class="block mt-2">MAX Torque(Kg.m/rpm): <input type="text" name="Engine_MAX_Torque" class="mt-1 w-full border-gray-300 rounded-md shadow-sm"></label>
+                        <label class="block mt-2">Oil Capacity(L): <input type="number" name="Engine_Oil_Capacity" class="mt-1 w-full border-gray-300 rounded-md shadow-sm"></label>
+                    </div>
+                    
+                    <div class="p-3 border rounded-md">
+                        <h3 class="font-semibold text-base mb-2">T/M</h3>
+                        <label class="block">Model: <input type="text" name="TM_Model" class="mt-1 w-full border-gray-300 rounded-md shadow-sm"></label>
+                        <label class="block mt-2">Gear Ratio: <input type="text" name="TM_Gear_Ratio" class="mt-1 w-full border-gray-300 rounded-md shadow-sm"></label>
+                        <label class="block mt-2">Range: <input type="text" name="TM_Range" class="mt-1 w-full border-gray-300 rounded-md shadow-sm"></label>
+                        <label class="block mt-2">Speed Pulse: <input type="text" name="TM_Speed_Pulse" class="mt-1 w-full border-gray-300 rounded-md shadow-sm"></label>
+                    </div>
+                    
+                     <div class="p-3 border rounded-md">
+                        <h3 class="font-semibold text-base mb-2">FRT Axle</h3>
+                        <label class="block">Capacity(ton): <input type="number" name="FRT_Axle_Capacity" class="mt-1 w-full border-gray-300 rounded-md shadow-sm"></label>
+                    </div>
+                    
+                    <div class="p-3 border rounded-md">
+                        <h3 class="font-semibold text-base mb-2">RR Axle</h3>
+                        <label class="block">Model: <input type="text" name="RR_Axle_Model" class="mt-1 w-full border-gray-300 rounded-md shadow-sm"></label>
+                        <label class="block mt-2">Ratio: <input type="text" name="RR_Axle_Ratio" class="mt-1 w-full border-gray-300 rounded-md shadow-sm"></label>
+                        <label class="block mt-2">Capacity(ton): <input type="number" name="RR_Axle_Capacity" class="mt-1 w-full border-gray-300 rounded-md shadow-sm"></label>
+                    </div>
+
+                    <div class="p-3 border rounded-md">
+                        <h3 class="font-semibold text-base mb-2">P/Shaft</h3>
+                        <label class="block">Model: <input type="text" name="P_Shaft_Model" class="mt-1 w-full border-gray-300 rounded-md shadow-sm"></label>
+                        <label class="block mt-2">Tube(O.DxT): <input type="text" name="P_Shaft_Tube" class="mt-1 w-full border-gray-300 rounded-md shadow-sm"></label>
+                    </div>
+                    
+                    <div class="p-3 border rounded-md">
+                        <h3 class="font-semibold text-base mb-2">Fuel Tank</h3>
+                        <label class="block">Capacity(l): <input type="number" name="Fuel_Tank_Capacity" class="mt-1 w-full border-gray-300 rounded-md shadow-sm"></label>
+                    </div>
+                    
+                    <div class="p-3 border rounded-md">
+                        <h3 class="font-semibold text-base mb-2">Clutch</h3>
+                        <label class="block">Type: <input type="text" name="Clutch_Type" class="mt-1 w-full border-gray-300 rounded-md shadow-sm"></label>
+                    </div>
+                    
+                    <div class="p-3 border rounded-md">
+                        <h3 class="font-semibold text-base mb-2">Tire</h3>
+                        <label class="block">Frt: <input type="text" name="Tire_Frt" class="mt-1 w-full border-gray-300 rounded-md shadow-sm"></label>
+                        <label class="block mt-2">Rear: <input type="text" name="Tire_Rear" class="mt-1 w-full border-gray-300 rounded-md shadow-sm"></label>
+                        <label class="block mt-2">Dynamic Loaded Radius: <input type="number" name="Tire_Dynamic_Loaded_Radius" class="mt-1 w-full border-gray-300 rounded-md shadow-sm"></label>
+                    </div>
+
+                    <div class="p-3 border rounded-md">
+                        <h3 class="font-semibold text-base mb-2">Brake</h3>
+                        <label class="block">Type: <input type="text" name="Brake_Type" class="mt-1 w-full border-gray-300 rounded-md shadow-sm"></label>
+                    </div>
+                </div>
+            </form>
+            <div class="flex justify-end space-x-2 pt-4 mt-auto">
+                <button type="button" id="cancel-vehicle-form-btn" class="bg-gray-200 text-gray-800 px-4 py-2 rounded-md hover:bg-gray-300">취소</button>
+                <button type="button" id="save-vehicle-form-btn" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700">저장</button>
+            </div>
+        </div>
+    </div>
+    
+    <div id="vehicle-details-popup" class="fixed inset-0 modal-bg items-center justify-center z-50 hidden p-4">
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-2xl p-6 h-full flex flex-col">
+            <h2 class="text-2xl font-bold mb-4">차량 상세 정보</h2>
+            <div id="vehicle-details-content" class="flex-grow overflow-y-auto pr-2"></div>
+            <div class="text-xs text-gray-500 mt-4">
+                <p id="vehicle-creator-info"></p>
+                <p id="vehicle-modifier-info"></p>
+            </div>
+            <div class="flex justify-end space-x-2 pt-4">
+                <button type="button" id="edit-vehicle-from-popup-btn" class="bg-yellow-500 text-white px-4 py-2 rounded-md hover:bg-yellow-600">편집</button>
+                <button type="button" id="close-vehicle-details-popup-btn" class="bg-gray-200 text-gray-800 px-4 py-2 rounded-md hover:bg-gray-300">닫기</button>
+            </div>
+        </div>
+    </div>
+    
+    <div id="load-vehicle-modal" class="fixed inset-0 modal-bg items-center justify-center z-50 hidden p-4">
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-4xl p-6 flex flex-col h-5/6">
+            <h2 class="text-2xl font-bold mb-4">불러올 차량 선택</h2>
+            <div class="flex-grow overflow-y-auto border rounded-lg">
+                <table class="w-full text-sm text-left text-gray-500">
+                    <thead class="text-xs text-gray-700 uppercase bg-gray-50 sticky top-0">
+                        <tr>
+                            <th scope="col" class="px-6 py-3">차량명</th>
+                            <th scope="col" class="px-6 py-3">엔진</th>
+                            <th scope="col" class="px-6 py-3">TM</th>
+                            <th scope="col" class="px-6 py-3">GVW(kg)</th>
+                            <th scope="col" class="px-6 py-3">R.Axle(ton)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="load-vehicle-list">
+                    </tbody>
+                </table>
+            </div>
+            <div class="flex justify-end pt-4">
+                <button type="button" id="close-load-vehicle-modal-btn" class="bg-gray-200 text-gray-800 px-4 py-2 rounded-md hover:bg-gray-300">취소</button>
+            </div>
+        </div>
+    </div>
+    
+    <div id="driving-log-modal" class="fixed inset-0 modal-bg items-center justify-center z-30 hidden p-4">
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-6xl p-6 flex flex-col h-full">
+            <h2 class="text-2xl font-bold mb-4">운행일지 관리</h2>
+             <div class="flex items-center space-x-2 mb-4">
+                <label for="log-vehicle-select" class="font-medium">차량 선택:</label>
+                <select id="log-vehicle-select" class="py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm"></select>
+                <button id="export-log-btn" class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700">일지 내보내기</button>
+                <label for="import-log-input" class="cursor-pointer bg-yellow-500 text-white px-4 py-2 rounded-md hover:bg-yellow-600">일지 불러오기</label>
+                <input type="file" id="import-log-input" class="hidden" accept=".json">
+            </div>
+            <div class="flex-grow flex space-x-4 overflow-hidden">
+                <div id="log-calendar-container" class="w-1/3 border rounded-lg p-4"></div>
+                <div class="w-2/3 border rounded-lg p-4 overflow-y-auto">
+                    <h3 class="font-semibold text-lg mb-2">
+                        <span id="log-date-display"></span> 운행일지
+                    </h3>
+                    <form id="driving-log-form" class="space-y-3 text-sm hidden">
+                        <input type="hidden" id="log-id">
+                        <input type="hidden" id="log-date">
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>운전자: <input type="text" id="log-driver" class="mt-1 w-full border-gray-300 rounded-md"></div>
+                            <div>날씨: <input type="text" id="log-weather" class="mt-1 w-full border-gray-300 rounded-md"></div>
+                        </div>
+                        <div>업무내용: <textarea id="log-task" rows="2" class="mt-1 w-full border-gray-300 rounded-md"></textarea></div>
+                        <div>시험코스: <input type="text" id="log-course" class="mt-1 w-full border-gray-300 rounded-md"></div>
+                        <div class="flex items-center"><input id="log-load-status" type="checkbox" class="mr-2"> 적차</div>
+
+                        <h4 class="font-semibold pt-2">주행거리</h4>
+                        <div class="grid grid-cols-3 gap-2">
+                            <div>시작(km): <input type="number" id="log-start-km" class="mt-1 w-full border-gray-300 rounded-md"></div>
+                            <div>종료(km): <input type="number" id="log-end-km" class="mt-1 w-full border-gray-300 rounded-md"></div>
+                            <div>운행(km): <input type="number" id="log-driven-km" class="mt-1 w-full border-gray-300 rounded-md bg-gray-100" readonly></div>
+                        </div>
+
+                        <h4 class="font-semibold pt-2">연료주입</h4>
+                        <div class="grid grid-cols-3 gap-2">
+                            <div>주입시(km): <input type="number" id="log-fuel-km" class="mt-1 w-full border-gray-300 rounded-md"></div>
+                            <div>경유(L): <input type="number" id="log-fuel-diesel" class="mt-1 w-full border-gray-300 rounded-md"></div>
+                            <div>UREA(L): <input type="number" id="log-fuel-urea" class="mt-1 w-full border-gray-300 rounded-md"></div>
+                        </div>
+
+                        <h4 class="font-semibold pt-2">비용</h4>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>외근비: <input type="number" id="log-expense" class="mt-1 w-full border-gray-300 rounded-md"></div>
+                            <div>통행료: <input type="number" id="log-toll" class="mt-1 w-full border-gray-300 rounded-md"></div>
+                        </div>
+
+                        <div>에러코드: <input type="text" id="log-error-code" class="mt-1 w-full border-gray-300 rounded-md"></div>
+                        <div>결함 및 특이사항: <textarea id="log-notes" rows="3" class="mt-1 w-full border-gray-300 rounded-md"></textarea></div>
+
+                        <div class="flex justify-end pt-2">
+                            <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700">저장</button>
+                        </div>
+                    </form>
+                    <div id="log-no-data" class="text-center text-gray-500 py-10">
+                        날짜를 선택하여 운행일지를 작성하거나 조회하세요.
+                    </div>
+                </div>
+            </div>
+             <div class="flex justify-end pt-4">
+                <button id="close-driving-log-modal-btn" class="bg-gray-200 text-gray-800 px-4 py-2 rounded-md hover:bg-gray-300">닫기</button>
+            </div>
+        </div>
+    </div>
+    
+    <div id="change-pw-modal" class="fixed inset-0 modal-bg items-center justify-center z-50 hidden">
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-sm p-6 space-y-4">
+            <h2 class="text-2xl font-bold">비밀번호 변경</h2>
+            <div id="pw-change-error" class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4 hidden" role="alert"></div>
+            <form id="change-pw-form" class="space-y-4">
+                <input type="password" id="current-password" placeholder="현재 비밀번호" required class="w-full px-4 py-3 border border-gray-300 rounded-md">
+                <input type="password" id="new-password" placeholder="새 비밀번호" required class="w-full px-4 py-3 border border-gray-300 rounded-md">
+                <input type="password" id="confirm-password" placeholder="새 비밀번호 확인" required class="w-full px-4 py-3 border border-gray-300 rounded-md">
+                <div class="flex justify-end space-x-2">
+                    <button type="button" id="cancel-change-pw-btn" class="bg-gray-200 text-gray-800 px-4 py-2 rounded-md hover:bg-gray-300">취소</button>
+                    <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700">변경</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="user-mgmt-modal" class="fixed inset-0 modal-bg items-center justify-center z-50 hidden">
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-3xl p-6 h-auto max-h-[80vh] flex flex-col">
+            <h2 class="text-2xl font-bold">계정 관리</h2>
+            <div class="my-4 p-4 border rounded-lg">
+                <h3 class="font-semibold mb-2">신규 계정 생성</h3>
+                <form id="new-user-form" class="space-y-3">
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
+                        <input type="text" id="new-user-id" placeholder="ID" required class="w-full px-3 py-2 border rounded-md">
+                        <input type="password" id="new-user-pw" placeholder="Password" required class="w-full px-3 py-2 border rounded-md">
+                        <select id="new-user-role" class="w-full px-3 py-2 border rounded-md bg-white">
+                            <option value="user">일반사용자</option>
+                            <option value="guest">방문자</option>
+                        </select>
+                        <button type="submit" class="bg-blue-600 text-white py-2 rounded-md hover:bg-blue-700 w-full">생성</button>
+                    </div>
+                    <div id="new-user-permissions" class="space-y-3 border-t pt-3 mt-2 text-sm">
+                        <div class="grid grid-cols-3 items-center">
+                            <span class="font-medium">차량DB 관리:</span>
+                            <label class="flex items-center"><input type="checkbox" data-perm="vehicleDb" data-type="view" class="mr-2 h-4 w-4 new-user-perm"> 보기</label>
+                            <label class="flex items-center"><input type="checkbox" data-perm="vehicleDb" data-type="edit" class="mr-2 h-4 w-4 new-user-perm"> 편집</label>
+                        </div>
+                        <div class="grid grid-cols-3 items-center">
+                            <span class="font-medium">운행일지 관리:</span>
+                            <label class="flex items-center"><input type="checkbox" data-perm="drivingLog" data-type="view" class="mr-2 h-4 w-4 new-user-perm"> 보기</label>
+                            <label class="flex items-center"><input type="checkbox" data-perm="drivingLog" data-type="edit" class="mr-2 h-4 w-4 new-user-perm"> 편집</label>
+                        </div>
+                        <div class="grid grid-cols-3 items-center">
+                            <span class="font-medium">운행현황 관리:</span>
+                            <label class="flex items-center"><input type="checkbox" data-perm="schedule" data-type="view" class="mr-2 h-4 w-4 new-user-perm"> 보기</label>
+                            <label class="flex items-center"><input type="checkbox" data-perm="schedule" data-type="edit" class="mr-2 h-4 w-4 new-user-perm"> 편집</label>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="flex-grow overflow-y-auto">
+                <table class="w-full text-sm">
+                    <thead class="bg-gray-50 text-left">
+                        <tr>
+                            <th class="px-4 py-2">ID</th>
+                            <th class="px-4 py-2">등급</th>
+                            <th class="px-4 py-2">권한</th>
+                            <th class="px-4 py-2">동작</th>
+                        </tr>
+                    </thead>
+                    <tbody id="user-list">
+                    </tbody>
+                </table>
+            </div>
+             <div class="flex justify-end pt-4">
+                <button id="close-user-mgmt-modal-btn" class="bg-gray-200 text-gray-800 px-4 py-2 rounded-md hover:bg-gray-300">닫기</button>
+            </div>
+        </div>
+    </div>
+    
+    <div id="edit-user-modal" class="fixed inset-0 modal-bg items-center justify-center z-50 hidden">
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-md p-6 space-y-4">
+            <h2 class="text-2xl font-bold">사용자 권한 수정</h2>
+            <form id="edit-user-form">
+                <input type="hidden" id="edit-user-id">
+                <p class="mb-4">사용자: <strong id="edit-user-id-display"></strong></p>
+                <div id="edit-user-permissions" class="space-y-3 text-sm">
+                     <div class="grid grid-cols-3 items-center">
+                        <span class="font-medium">차량DB 관리:</span>
+                        <label class="flex items-center"><input type="checkbox" data-perm="vehicleDb" data-type="view" class="mr-2 h-4 w-4 edit-user-perm"> 보기</label>
+                        <label class="flex items-center"><input type="checkbox" data-perm="vehicleDb" data-type="edit" class="mr-2 h-4 w-4 edit-user-perm"> 편집</label>
+                    </div>
+                    <div class="grid grid-cols-3 items-center">
+                        <span class="font-medium">운행일지 관리:</span>
+                        <label class="flex items-center"><input type="checkbox" data-perm="drivingLog" data-type="view" class="mr-2 h-4 w-4 edit-user-perm"> 보기</label>
+                        <label class="flex items-center"><input type="checkbox" data-perm="drivingLog" data-type="edit" class="mr-2 h-4 w-4 edit-user-perm"> 편집</label>
+                    </div>
+                    <div class="grid grid-cols-3 items-center">
+                        <span class="font-medium">운행현황 관리:</span>
+                        <label class="flex items-center"><input type="checkbox" data-perm="schedule" data-type="view" class="mr-2 h-4 w-4 edit-user-perm"> 보기</label>
+                        <label class="flex items-center"><input type="checkbox" data-perm="schedule" data-type="edit" class="mr-2 h-4 w-4 edit-user-perm"> 편집</label>
+                    </div>
+                </div>
+                <div class="flex justify-end space-x-2 pt-4">
+                    <button type="button" id="cancel-edit-user-btn" class="bg-gray-200 text-gray-800 px-4 py-2 rounded-md hover:bg-gray-300">취소</button>
+                    <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700">저장</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- 활동 로그 모달 -->
+    <div id="activity-log-modal" class="fixed inset-0 modal-bg items-center justify-center z-50 hidden p-4">
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-6xl p-6 flex flex-col h-full">
+            <div class="flex justify-between items-center mb-4">
+                 <h2 class="text-2xl font-bold">활동 로그</h2>
+                 <button id="clear-log-btn" class="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 text-sm">로그 비우기</button>
+            </div>
+            <div class="flex-grow overflow-y-auto border rounded-lg">
+                <table class="w-full text-sm text-left text-gray-500">
+                    <thead class="text-xs text-gray-700 uppercase bg-gray-50 sticky top-0">
+                        <tr>
+                            <th scope="col" class="px-6 py-3 w-1/5">시간</th>
+                            <th scope="col" class="px-6 py-3 w-1/6">사용자</th>
+                            <th scope="col" class="px-6 py-3 w-1/6">행동</th>
+                            <th scope="col" class="px-6 py-3 w-1/2">상세 내용</th>
+                        </tr>
+                    </thead>
+                    <tbody id="activity-log-list">
+                        <!-- 로그 내용 -->
+                    </tbody>
+                </table>
+            </div>
+            <div class="flex justify-end pt-4">
+                <button id="close-activity-log-modal-btn" class="bg-gray-200 text-gray-800 px-4 py-2 rounded-md hover:bg-gray-300">닫기</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 확인 모달 -->
+    <div id="confirmation-modal" class="fixed inset-0 modal-bg items-center justify-center z-50 hidden">
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-sm p-6 space-y-4 animate-scale-in">
+            <h2 id="confirmation-title" class="text-2xl font-bold">작업 확인</h2>
+            <p id="confirmation-message" class="text-gray-600">이 작업을 정말로 실행하시겠습니까?</p>
+            <div class="flex justify-end space-x-2 pt-2">
+                <button type="button" id="cancel-confirmation-btn" class="bg-gray-200 text-gray-800 px-4 py-2 rounded-md hover:bg-gray-300">취소</button>
+                <button type="button" id="confirm-action-btn" class="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700">확인</button>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- 전역 알림창 -->
+    <div id="toast-notification" class="fixed top-5 right-5 bg-green-500 text-white py-2 px-4 rounded-lg shadow-lg transform translate-x-full transition-transform duration-500">
+        <p>성공적으로 처리되었습니다.</p>
+    </div>
+    
+    <!-- 전역 툴팁 -->
+    <div id="global-tooltip" class="hidden absolute z-50 p-2 text-sm text-white bg-gray-900 rounded-lg shadow-sm whitespace-nowrap"></div>
+
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const App = {
+        // APPLICATION STATE
+        state: {
+            users: [],
+            vehicles: [],
+            schedules: [],
+            departments: [],
+            drivingLogs: [],
+            activityLogs: [], // 활동 로그 추가
+            currentDate: new Date(),
+            logCalendarDate: new Date(),
+        },
+        currentUser: null,
+        elements: {}, // DOM Element Cache
+
+        // INITIALIZATION
+        init() {
+            this.cacheElements();
+            this.loadData();
+            this.bindEvents();
+            const loggedInUser = sessionStorage.getItem('vms_currentUser');
+            if (loggedInUser) {
+                this.currentUser = JSON.parse(loggedInUser);
+                this.showMainApp();
+            }
+        },
+
+        cacheElements() {
+            const ids = [
+                'login-screen', 'username', 'password', 'login-btn', 'login-error', 'main-app', 'current-user-display', 
+                'logout-btn', 'change-pw-btn', 'user-mgmt-btn', 'vehicle-db-mgmt-btn', 'driving-log-mgmt-btn', 'schedule-mgmt-btn', 'save-all-btn', 
+                'load-all-input', 'traffic-light-section', 'traffic-light-status', 'prev-month-btn', 'next-month-btn', 'current-month-display', 'calendar-view',
+                'schedule-modal', 'schedule-modal-title', 'schedule-form', 'schedule-id', 'schedule-vehicle', 'schedule-title',
+                'schedule-start-date', 'schedule-end-date', 'schedule-type', 'manage-departments-btn', 'schedule-department',
+                'schedule-driver', 'schedule-requester', 'schedule-load-status', 'delete-schedule-btn', 'cancel-schedule-btn',
+                'department-modal', 'department-list', 'new-department-name', 'new-department-color', 'add-department-btn', 'close-department-modal-btn',
+                'vehicle-db-modal', 'add-vehicle-btn', 'export-selected-vehicle-btn', 'export-all-vehicle-btn', 'import-vehicle-input',
+                'delete-selected-vehicle-btn', 'select-all-vehicles', 'vehicle-db-list', 'close-vehicle-db-modal-btn',
+                'vehicle-form-modal', 'vehicle-form-title', 'vehicle-form', 'vehicle-id', 'load-from-existing-btn', 
+                'cancel-vehicle-form-btn', 'save-vehicle-form-btn', 'vehicle-details-popup', 'vehicle-details-content', 
+                'vehicle-creator-info', 'vehicle-modifier-info', 'edit-vehicle-from-popup-btn', 'close-vehicle-details-popup-btn',
+                'load-vehicle-modal', 'load-vehicle-list', 'close-load-vehicle-modal-btn',
+                'driving-log-modal', 'log-vehicle-select', 'export-log-btn', 'import-log-input', 'log-calendar-container', 
+                'log-date-display', 'driving-log-form', 'log-id', 'log-date', 'log-driver', 'log-weather', 'log-task', 'log-course',
+                'log-load-status', 'log-start-km', 'log-end-km', 'log-driven-km', 'log-fuel-km', 'log-fuel-diesel', 'log-fuel-urea',
+                'log-expense', 'log-toll', 'log-error-code', 'log-notes', 'log-no-data', 'close-driving-log-modal-btn',
+                'change-pw-modal', 'pw-change-error', 'change-pw-form', 'current-password', 'new-password', 'confirm-password', 
+                'cancel-change-pw-btn', 'user-mgmt-modal', 'new-user-form', 'new-user-id', 'new-user-pw', 'new-user-role', 'new-user-permissions',
+                'user-list', 'close-user-mgmt-modal-btn', 'toast-notification',
+                'edit-user-modal', 'edit-user-form', 'edit-user-id', 'edit-user-id-display', 'edit-user-permissions', 'cancel-edit-user-btn',
+                'global-tooltip', 'activity-log-btn', 'activity-log-modal', 'activity-log-list', 'clear-log-btn', 'close-activity-log-modal-btn',
+                'confirmation-modal', 'confirmation-title', 'confirmation-message', 'cancel-confirmation-btn', 'confirm-action-btn'
+            ];
+            ids.forEach(id => {
+                const camelCaseId = id.replace(/-(\w)/g, (match, letter) => letter.toUpperCase());
+                this.elements[camelCaseId] = document.getElementById(id);
+            });
+        },
+
+        // BIND ALL EVENT LISTENERS
+        bindEvents() {
+            // Login
+            this.elements.loginBtn.addEventListener('click', () => this.handleLogin());
+            this.elements.password.addEventListener('keypress', (e) => { if (e.key === 'Enter') this.handleLogin(); });
+            this.elements.logoutBtn.addEventListener('click', () => this.handleLogout());
+
+            // Header buttons
+            this.elements.vehicleDbMgmtBtn.addEventListener('click', () => this.openModal('vehicleDbModal'));
+            this.elements.drivingLogMgmtBtn.addEventListener('click', () => this.openModal('drivingLogModal'));
+            this.elements.scheduleMgmtBtn.addEventListener('click', () => this.openScheduleForm());
+            this.elements.changePwBtn.addEventListener('click', () => this.openModal('changePwModal'));
+            this.elements.userMgmtBtn.addEventListener('click', () => this.openModal('userMgmtModal'));
+            this.elements.activityLogBtn.addEventListener('click', () => this.openModal('activityLogModal'));
+
+            // Data IO
+            this.elements.saveAllBtn.addEventListener('click', () => this.saveAllDataToFile());
+            this.elements.loadAllInput.addEventListener('change', (e) => this.loadAllDataFromFile(e));
+            
+            // Calendar Navigation
+            this.elements.prevMonthBtn.addEventListener('click', () => this.changeMonth(-1));
+            this.elements.nextMonthBtn.addEventListener('click', () => this.changeMonth(1));
+            
+            // Modals Close Buttons
+            const closeActions = {
+                cancelScheduleBtn: 'scheduleModal', closeDepartmentModalBtn: 'departmentModal',
+                closeVehicleDbModalBtn: 'vehicleDbModal', cancelVehicleFormBtn: 'vehicleFormModal',
+                closeVehicleDetailsPopupBtn: 'vehicleDetailsPopup', closeLoadVehicleModalBtn: 'loadVehicleModal',
+                closeDrivingLogModalBtn: 'drivingLogModal', cancelChangePwBtn: 'changePwModal',
+                closeUserMgmtModalBtn: 'userMgmtModal', cancelEditUserBtn: 'editUserModal',
+                closeActivityLogModalBtn: 'activityLogModal', cancelConfirmationBtn: 'confirmationModal'
+            };
+            for (const [btnId, modalId] of Object.entries(closeActions)) {
+                 if (this.elements[btnId]) {
+                    this.elements[btnId].addEventListener('click', () => this.closeModal(modalId));
+                }
+            }
+            
+            // Schedule Modal
+            this.elements.scheduleForm.addEventListener('submit', (e) => this.handleSaveSchedule(e));
+            this.elements.deleteScheduleBtn.addEventListener('click', () => this.handleDeleteSchedule());
+            this.elements.manageDepartmentsBtn.addEventListener('click', () => this.openModal('departmentModal'));
+
+            // Department Modal
+            this.elements.addDepartmentBtn.addEventListener('click', () => this.handleAddDepartment());
+
+            // Vehicle DB Modal
+            this.elements.addVehicleBtn.addEventListener('click', () => this.openVehicleForm());
+            this.elements.selectAllVehicles.addEventListener('change', (e) => this.handleSelectAllVehicles(e));
+            this.elements.deleteSelectedVehicleBtn.addEventListener('click', () => this.handleDeleteSelectedVehicles());
+            this.elements.exportSelectedVehicleBtn.addEventListener('click', () => this.exportVehicles(true));
+            this.elements.exportAllVehicleBtn.addEventListener('click', () => this.exportVehicles(false));
+            this.elements.importVehicleInput.addEventListener('change', (e) => this.importVehicles(e));
+
+            // Vehicle Form Modal
+            this.elements.saveVehicleFormBtn.addEventListener('click', () => this.handleSaveVehicle());
+            this.elements.loadFromExistingBtn.addEventListener('click', () => this.openModal('loadVehicleModal'));
+            this.elements.editVehicleFromPopupBtn.addEventListener('click', () => this.handleEditVehicleFromPopup());
+            
+            // Driving Log Modal
+            this.elements.logVehicleSelect.addEventListener('change', () => this.renderLogCalendar());
+            this.elements.drivingLogForm.addEventListener('submit', (e) => this.handleSaveDrivingLog(e));
+            this.elements.logStartKm.addEventListener('input', () => this.calculateDrivenKm());
+            this.elements.logEndKm.addEventListener('input', () => this.calculateDrivenKm());
+            this.elements.exportLogBtn.addEventListener('click', () => this.exportDrivingLogs());
+            this.elements.importLogInput.addEventListener('change', (e) => this.importDrivingLogs(e));
+            
+            // Password Change Modal
+            this.elements.changePwForm.addEventListener('submit', (e) => this.handleChangePassword(e));
+            
+            // User Management Modal
+            this.elements.newUserRole.addEventListener('change', (e) => {
+                this.elements.newUserPermissions.style.display = e.target.value === 'user' ? 'block' : 'none';
+            });
+            this.elements.newUserForm.addEventListener('submit', (e) => this.handleAddNewUser(e));
+            this.elements.editUserForm.addEventListener('submit', (e) => this.handleUpdateUser(e));
+            
+            // Activity Log Modal
+            this.elements.clearLogBtn.addEventListener('click', () => this.handleClearLogs());
+
+            // Confirmation Modal
+            this.elements.confirmActionBtn.addEventListener('click', () => {
+                if (this._confirmActionCallback) this._confirmActionCallback();
+                this._confirmActionCallback = null;
+                this.closeModal('confirmationModal');
+            });
+
+            // Permission Checkbox Logic
+            const setupPermCheckboxes = (containerSelector) => {
+                const container = document.querySelector(containerSelector);
+                if (!container) return;
+                
+                container.addEventListener('change', (e) => {
+                    if (!e.target.matches('input[type="checkbox"]')) return;
+
+                    const perm = e.target.dataset.perm;
+                    const type = e.target.dataset.type;
+                    const viewCheckbox = container.querySelector(`input[data-perm="${perm}"][data-type="view"]`);
+                    const editCheckbox = container.querySelector(`input[data-perm="${perm}"][data-type="edit"]`);
+
+                    if (type === 'edit' && editCheckbox.checked) {
+                        viewCheckbox.checked = true;
+                        viewCheckbox.disabled = true;
+                    } else if (type === 'edit' && !editCheckbox.checked) {
+                        viewCheckbox.disabled = false;
+                    } else if (type === 'view' && !viewCheckbox.checked) {
+                        editCheckbox.checked = false;
+                        viewCheckbox.disabled = false;
+                    }
+                });
+            };
+            setupPermCheckboxes('#new-user-permissions');
+            setupPermCheckboxes('#edit-user-permissions');
+        },
+        
+        // --- LOGGING ---
+        logActivity(action, details) {
+            this.state.activityLogs.unshift({ // 최신 로그가 위로 오도록 unshift 사용
+                timestamp: new Date().toISOString(),
+                userId: this.currentUser ? this.currentUser.id : 'System',
+                action,
+                details
+            });
+            // 로그 최대 1000개 유지
+            if (this.state.activityLogs.length > 1000) {
+                this.state.activityLogs.pop();
+            }
+        },
+
+        // --- Confirmation Modal Logic ---
+        _confirmActionCallback: null,
+
+        showConfirmationModal(title, message, onConfirm) {
+            this.elements.confirmationTitle.textContent = title;
+            this.elements.confirmationMessage.innerHTML = message;
+            this._confirmActionCallback = onConfirm;
+            this.openModal('confirmationModal');
+        },
+
+        // --- AUTHENTICATION ---
+        handleLogin() {
+            const username = this.elements.username.value;
+            const password = this.elements.password.value;
+            const user = this.state.users.find(u => u.id === username && u.pw === password);
+
+            if (user) {
+                this.currentUser = user;
+                this.logActivity('LOGIN', `User '${username}' logged in.`);
+                sessionStorage.setItem('vms_currentUser', JSON.stringify(user));
+                this.elements.loginError.classList.add('hidden');
+                this.showMainApp();
+            } else {
+                this.elements.loginError.classList.remove('hidden');
+            }
+        },
+
+        handleLogout() {
+            this.logActivity('LOGOUT', `User '${this.currentUser.id}' logged out.`);
+            this.currentUser = null;
+            sessionStorage.removeItem('vms_currentUser');
+            this.elements.loginScreen.style.display = 'flex';
+            this.elements.mainApp.classList.add('hidden');
+        },
+
+        showMainApp() {
+            this.elements.loginScreen.style.display = 'none';
+            this.elements.mainApp.classList.remove('hidden');
+            this.elements.currentUserDisplay.textContent = `${this.currentUser.id} (${this.currentUser.role})님`;
+            this.updatePermissions();
+            this.renderAll();
+        },
+
+        updatePermissions() {
+            const role = this.currentUser.role;
+            const perms = this.currentUser.permissions || {};
+            
+            const isAdmin = role === 'admin';
+            const isGuest = role === 'guest';
+
+            const setButtonState = (element, enabled) => {
+                if (!element) return;
+                const isLabel = element.tagName === 'LABEL';
+                const targetElement = isLabel ? document.getElementById(element.getAttribute('for')) : element;
+                if (targetElement) targetElement.disabled = !enabled;
+
+                if (enabled) {
+                    element.classList.remove('opacity-50', 'cursor-not-allowed');
+                    element.style.pointerEvents = 'auto';
+                } else {
+                    element.classList.add('opacity-50', 'cursor-not-allowed');
+                    if (isLabel) element.style.pointerEvents = 'none';
+                }
+            };
+
+            // --- Make all relevant buttons visible
+            this.elements.userMgmtBtn.style.display = 'inline-flex';
+            this.elements.vehicleDbMgmtBtn.style.display = 'inline-flex';
+            this.elements.drivingLogMgmtBtn.style.display = 'inline-flex';
+            this.elements.scheduleMgmtBtn.style.display = 'inline-flex';
+            this.elements.saveAllBtn.style.display = 'inline-flex';
+            this.elements.loadAllInput.parentElement.style.display = 'inline-flex';
+            this.elements.changePwBtn.style.display = 'inline-flex';
+            this.elements.logoutBtn.style.display = 'inline-flex';
+            this.elements.activityLogBtn.style.display = 'inline-flex';
+            
+            // --- Set button enabled/disabled state based on permissions
+            setButtonState(this.elements.userMgmtBtn, isAdmin);
+            setButtonState(this.elements.activityLogBtn, isAdmin);
+            setButtonState(this.elements.vehicleDbMgmtBtn, isAdmin || (role === 'user' && perms.vehicleDb && perms.vehicleDb.view));
+            setButtonState(this.elements.drivingLogMgmtBtn, isAdmin || (role === 'user' && perms.drivingLog && perms.drivingLog.view));
+            setButtonState(this.elements.scheduleMgmtBtn, isAdmin || (role === 'user' && perms.schedule && perms.schedule.edit));
+            setButtonState(this.elements.saveAllBtn, isAdmin);
+            setButtonState(this.elements.loadAllInput.parentElement, isAdmin);
+            setButtonState(this.elements.changePwBtn, !isGuest);
+
+            this.elements.trafficLightSection.style.display = 'block';
+        },
+        
+        // --- DATA PERSISTENCE ---
+        saveData() {
+            localStorage.setItem('vms_data', JSON.stringify(this.state));
+        },
+
+        loadData() {
+            const data = localStorage.getItem('vms_data');
+            if (data) {
+                this.state = JSON.parse(data);
+                // Ensure dates are Date objects
+                if (this.state.schedules) {
+                    this.state.schedules.forEach(s => {
+                        s.startDate = new Date(s.startDate);
+                        s.endDate = new Date(s.endDate);
+                    });
+                }
+                this.state.currentDate = this.state.currentDate ? new Date(this.state.currentDate) : new Date();
+                this.state.logCalendarDate = this.state.logCalendarDate ? new Date(this.state.logCalendarDate) : new Date();
+                if (!this.state.activityLogs) this.state.activityLogs = []; // Initialize logs if not present
+            } else {
+                // Initialize default data if nothing is stored
+                this.state.users = [
+                    { id: 'admin', pw: '0000', role: 'admin' },
+                    { 
+                        id: 'user', 
+                        pw: '1234', 
+                        role: 'user', 
+                        permissions: { 
+                            vehicleDb: { view: true, edit: true }, 
+                            drivingLog: { view: true, edit: true }, 
+                            schedule: { view: true, edit: true } 
+                        } 
+                    },
+                    { id: 'guest', pw: '1111', role: 'guest' }
+                ];
+                this.state.departments = [
+                    { name: '동력', color: '#EF4444' }, { name: '전장', color: '#3B82F6' },
+                    { name: 'R&H', color: '#22C55E' }, { name: 'NVH', color: '#F97316' },
+                    { name: '제동', color: '#8B5CF6' },
+                ];
+                this.state.activityLogs = [];
+                this.saveData();
+            }
+        },
+
+        saveAllDataToFile() {
+            const dataStr = JSON.stringify(this.state, null, 2);
+            const blob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `vms_backup_${new Date().toISOString().slice(0, 10)}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+            this.logActivity('EXPORT', 'Exported all data to a file.');
+            this.showToast('전체 데이터가 파일로 저장되었습니다.');
+        },
+
+        loadAllDataFromFile(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const data = JSON.parse(e.target.result);
+                    // Basic validation
+                    if (data.users && data.vehicles && data.schedules) {
+                        this.state = data;
+                        if (!this.state.activityLogs) this.state.activityLogs = []; // Ensure logs array exists
+                        // FIX: Convert date strings back to Date objects after loading from file
+                        if (this.state.schedules) {
+                            this.state.schedules.forEach(s => {
+                                s.startDate = new Date(s.startDate);
+                                s.endDate = new Date(s.endDate);
+                            });
+                        }
+                        this.state.currentDate = this.state.currentDate ? new Date(this.state.currentDate) : new Date();
+                        this.state.logCalendarDate = this.state.logCalendarDate ? new Date(this.state.logCalendarDate) : new Date();
+                        
+                        this.logActivity('IMPORT', 'Imported all data from a file.');
+                        this.saveData();
+                        this.renderAll();
+                        this.showToast('전체 데이터를 성공적으로 불러왔습니다.');
+                    } else {
+                        throw new Error('Invalid data structure');
+                    }
+                } catch (error) {
+                    this.showToast('데이터 불러오기에 실패했습니다. 유효한 파일이 아닙니다.', true);
+                } finally {
+                    event.target.value = ''; // Reset file input
+                }
+            };
+            reader.readAsText(file);
+        },
+
+        // --- UI RENDERING ---
+        renderAll() {
+            this.renderTrafficLights();
+            this.renderCalendar();
+            this.renderVehicleDBList();
+            this.renderDepartmentList();
+            this.updateScheduleFormOptions();
+            this.renderLoadVehicleList();
+            this.renderLogVehicleOptions();
+            this.renderLogCalendar();
+            this.renderUserList();
+            this.renderActivityLog();
+        },
+        
+        renderTrafficLights() {
+            this.elements.trafficLightStatus.innerHTML = '';
+            if (this.state.vehicles.length === 0) {
+                 this.elements.trafficLightStatus.innerHTML = '<p class="text-gray-500 col-span-full">등록된 차량이 없습니다.</p>';
+                 return;
+            }
+            const today = new Date();
+            today.setHours(0,0,0,0);
+            
+            this.state.vehicles.forEach(vehicle => {
+                const schedule = this.state.schedules.find(s => {
+                    const startDate = new Date(s.startDate); startDate.setHours(0,0,0,0);
+                    const endDate = new Date(s.endDate); endDate.setHours(0,0,0,0);
+                    return s.vehicleId === vehicle.id && startDate <= today && today <= endDate;
+                });
+                
+                let colorClass = 'bg-green-500';
+                let statusText = '사용가능';
+
+                if (schedule) {
+                    if (['고장'].includes(schedule.type)) {
+                        colorClass = 'bg-black'; statusText = '고장';
+                    } else if (['정비'].includes(schedule.type)) {
+                        colorClass = 'bg-gray-500'; statusText = '정비중';
+                    } else {
+                        colorClass = 'bg-red-500'; statusText = '사용중';
+                    }
+                }
+                
+                const div = document.createElement('div');
+                div.className = 'p-3 rounded-lg shadow-md bg-white text-center';
+                div.innerHTML = `
+                    <div class="flex items-center justify-center mb-2">
+                        <span class="w-4 h-4 rounded-full ${colorClass} mr-2"></span>
+                        <span class="font-bold text-lg">${vehicle.data['차량명'] || '이름없음'}</span>
+                    </div>
+                    <p class="text-sm text-gray-600">${statusText}</p>
+                `;
+                this.elements.trafficLightStatus.appendChild(div);
+            });
+        },
+        
+        renderCalendar() {
+            const date = this.state.currentDate;
+            const year = date.getFullYear();
+            const month = date.getMonth();
+            this.elements.currentMonthDisplay.textContent = `${year}년 ${month + 1}월`;
+            
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+            const dates = [];
+            for (let day = 1; day <= daysInMonth; day++) {
+                const d = new Date(year, month, day);
+                if (d.getDay() !== 0 && d.getDay() !== 6) { // 토, 일 제외
+                    dates.push(d);
+                }
+            }
+
+            let headerHtml = '<div class="font-semibold bg-gray-100 p-2 text-center sticky left-0 z-10 flex items-center justify-center">차량</div>';
+            const daysOfWeek = ['일', '월', '화', '수', '목', '금', '토'];
+            dates.forEach(d => {
+                headerHtml += `<div class="font-semibold bg-gray-100 p-1 text-center text-xs flex flex-col justify-center">
+                                 <span>${String(d.getDate()).padStart(2, '0')}</span>
+                                 <span class="font-normal text-gray-500">${daysOfWeek[d.getDay()]}</span>
+                               </div>`;
+            });
+            
+            let bodyHtml = '';
+            this.state.vehicles.forEach(vehicle => {
+                bodyHtml += `<div class="font-semibold bg-gray-50 p-2 text-center sticky left-0 z-10 flex items-center justify-center">${vehicle.data['차량명']}</div>`;
+                dates.forEach(d => {
+                    bodyHtml += `<div class="bg-white border relative min-h-[40px] progress-bar-container" data-date="${d.toISOString().slice(0, 10)}" data-vehicle-id="${vehicle.id}"></div>`;
+                });
+            });
+
+            this.elements.calendarView.innerHTML = `
+                <div class="calendar-grid" style="grid-template-columns: 150px repeat(${dates.length}, minmax(42px, 1fr));">
+                    ${headerHtml}${bodyHtml}
+                </div>`;
+            
+            this.renderSchedulesOnCalendar(dates);
+            
+            this.elements.calendarView.querySelectorAll('.progress-bar-container').forEach(cell => {
+                cell.addEventListener('click', (e) => {
+                    if (e.target !== cell) return; 
+                    const perms = this.currentUser.permissions || {};
+                    if (this.currentUser.role === 'guest' || (this.currentUser.role === 'user' && !perms.schedule)) return;
+                    this.openScheduleForm(null, cell.dataset.vehicleId, cell.dataset.date);
+                });
+            });
+        },
+        
+        renderSchedulesOnCalendar(dates) {
+            if (dates.length === 0) return;
+            const firstDateInView = dates[0];
+            const lastDateInView = dates[dates.length - 1];
+
+            this.state.schedules
+                .filter(s => new Date(s.endDate) >= firstDateInView && new Date(s.startDate) <= lastDateInView)
+                .forEach(schedule => {
+                    const startDate = new Date(schedule.startDate);
+                    const endDate = new Date(schedule.endDate);
+                    const scheduleStartMs = new Date(startDate.toDateString()).getTime();
+                    const scheduleEndMs = new Date(endDate.toDateString()).getTime();
+
+                    let startIdx = dates.findIndex(d => d.getTime() >= scheduleStartMs);
+                    if (scheduleStartMs < firstDateInView.getTime()) startIdx = 0;
+                    else if (startIdx === -1) return;
+                    
+                    let endIdx = -1;
+                    for (let i = dates.length - 1; i >= 0; i--) {
+                        if (dates[i].getTime() <= scheduleEndMs) { endIdx = i; break; }
+                    }
+                    if (scheduleEndMs > lastDateInView.getTime()) endIdx = dates.length - 1;
+                    else if (endIdx === -1) return;
+                    
+                    if (endIdx < startIdx) return;
+
+                    const targetCell = this.elements.calendarView.querySelector(`div[data-date='${dates[startIdx].toISOString().slice(0,10)}'][data-vehicle-id='${schedule.vehicleId}']`);
+                    if (targetCell) {
+                        const department = this.state.departments.find(d => d.name === schedule.department);
+                        const color = department ? department.color : '#6B7280';
+                        
+                        const today = new Date(); today.setHours(0,0,0,0);
+                        const duration = (endDate - startDate) / (1000 * 3600 * 24) + 1;
+                        const elapsed = (today - startDate) / (1000 * 3600 * 24) + 1;
+                        const progress = Math.min(100, Math.max(0, (elapsed / duration) * 100));
+
+                        const bar = document.createElement('div');
+                        bar.className = 'progress-bar';
+                        bar.style.backgroundColor = color;
+                        bar.style.width = `calc(${(endIdx - startIdx + 1) * 100}% + ${endIdx - startIdx}px)`;
+                        bar.dataset.scheduleId = schedule.id;
+                        bar.innerHTML = `<span>${schedule.title} (${progress.toFixed(0)}%)</span>`;
+                        
+                        bar.addEventListener('click', () => {
+                             const perms = this.currentUser.permissions || {};
+                             if (this.currentUser.role === 'guest' || (this.currentUser.role === 'user' && !perms.schedule)) return;
+                             this.openScheduleForm(schedule.id)
+                        });
+
+                        bar.addEventListener('mouseover', (e) => {
+                            const tooltip = this.elements.globalTooltip;
+                            const tooltipContent = `
+                                <b>운전자: ${schedule.driver}</b><br>
+                                요약: ${schedule.title}<br>
+                                기간: ${schedule.startDate.toISOString().slice(0,10)} ~ ${schedule.endDate.toISOString().slice(0,10)}<br>
+                                부서: ${schedule.department}<br>
+                                형태: ${schedule.type}<br>
+                                상태: ${schedule.isLoaded ? '적차' : '공차'}
+                            `;
+                            tooltip.innerHTML = tooltipContent;
+                            const rect = e.target.getBoundingClientRect();
+                            tooltip.style.left = `${rect.left + window.scrollX}px`;
+                            tooltip.style.top = `${rect.top + window.scrollY - 8}px`;
+                            tooltip.style.transform = 'translateY(-100%)';
+                            tooltip.classList.remove('hidden');
+                        });
+                        bar.addEventListener('mouseout', () => this.elements.globalTooltip.classList.add('hidden'));
+                        targetCell.appendChild(bar);
+                    }
+                });
+        },
+
+        changeMonth(offset) {
+            this.state.currentDate.setMonth(this.state.currentDate.getMonth() + offset);
+            this.renderCalendar();
+        },
+        
+        // --- MODAL & FORM HANDLING ---
+        openModal(modalId) {
+            this.elements[modalId].classList.remove('hidden');
+            const perms = this.currentUser.permissions || {};
+            const isAdmin = this.currentUser.role === 'admin';
+
+            // Disable/hide elements based on edit permissions
+            if (modalId === 'vehicleDbModal') {
+                const canEdit = isAdmin || (perms.vehicleDb && perms.vehicleDb.edit);
+                this.elements.addVehicleBtn.style.display = canEdit ? 'inline-flex' : 'none';
+                this.elements.importVehicleInput.parentElement.style.display = canEdit ? 'inline-flex' : 'none';
+                this.elements.deleteSelectedVehicleBtn.style.display = canEdit ? 'inline-flex' : 'none';
+            }
+            if (modalId === 'drivingLogModal') {
+                const canEdit = isAdmin || (perms.drivingLog && perms.drivingLog.edit);
+                this.elements.drivingLogForm.querySelectorAll('input, textarea').forEach(el => {
+                    if (el.id !== 'log-driven-km') el.readOnly = !canEdit;
+                });
+                this.elements.drivingLogForm.querySelector('button[type="submit"]').style.display = canEdit ? 'inline-flex' : 'none';
+                this.elements.importLogInput.parentElement.style.display = canEdit ? 'inline-flex' : 'none';
+            }
+            
+            // Specific render calls when a modal opens
+            if (modalId === 'vehicleDbModal') this.renderVehicleDBList();
+            if (modalId === 'loadVehicleModal') this.renderLoadVehicleList();
+            if (modalId === 'drivingLogModal') { this.renderLogVehicleOptions(); this.renderLogCalendar(); }
+            if (modalId === 'userMgmtModal') this.renderUserList();
+            if (modalId === 'activityLogModal') this.renderActivityLog();
+        },
+
+        closeModal(modalId) { this.elements[modalId].classList.add('hidden'); },
+        showToast(message, isError = false) {
+            const toast = this.elements.toastNotification;
+            toast.textContent = message;
+            toast.className = `fixed top-5 right-5 text-white py-2 px-4 rounded-lg shadow-lg transform transition-transform duration-500 ${isError ? 'bg-red-500' : 'bg-green-500'}`;
+            toast.classList.remove('translate-x-full');
+            setTimeout(() => toast.classList.add('translate-x-full'), 3000);
+        },
+        
+        // Schedule
+        openScheduleForm(scheduleId = null, vehicleId = null, date = null) {
+            this.elements.scheduleForm.reset();
+            this.updateScheduleFormOptions();
+
+            if (scheduleId) {
+                const schedule = this.state.schedules.find(s => s.id === scheduleId);
+                this.elements.scheduleModalTitle.textContent = '일정 수정';
+                this.elements.scheduleId.value = schedule.id;
+                this.elements.scheduleVehicle.value = schedule.vehicleId;
+                this.elements.scheduleTitle.value = schedule.title;
+                this.elements.scheduleStartDate.value = schedule.startDate.toISOString().slice(0,10);
+                this.elements.scheduleEndDate.value = schedule.endDate.toISOString().slice(0,10);
+                this.elements.scheduleType.value = schedule.type;
+                this.elements.scheduleDepartment.value = schedule.department;
+                this.elements.scheduleDriver.value = schedule.driver;
+                this.elements.scheduleRequester.value = schedule.requester || '';
+                this.elements.scheduleLoadStatus.checked = schedule.isLoaded;
+                this.elements.deleteScheduleBtn.classList.remove('hidden');
+            } else {
+                this.elements.scheduleModalTitle.textContent = '일정 등록';
+                this.elements.scheduleId.value = '';
+                if(vehicleId) this.elements.scheduleVehicle.value = vehicleId;
+                if(date) {
+                    this.elements.scheduleStartDate.value = date;
+                    this.elements.scheduleEndDate.value = date;
+                }
+                this.elements.deleteScheduleBtn.classList.add('hidden');
+            }
+            
+            const perms = this.currentUser.permissions || {};
+            const canEdit = this.currentUser.role === 'admin' || (perms.schedule && perms.schedule.edit);
+            this.elements.scheduleForm.querySelectorAll('input, select').forEach(el => el.disabled = !canEdit);
+            this.elements.scheduleForm.querySelectorAll('button').forEach(btn => {
+                if(btn.id !== 'cancel-schedule-btn' && btn.id !== 'close-department-modal-btn') {
+                    btn.style.display = canEdit ? 'inline-flex' : 'none';
+                }
+            });
+
+            this.openModal('scheduleModal');
+        },
+
+        handleSaveSchedule(e) {
+            e.preventDefault();
+            const perms = this.currentUser.permissions || {};
+            if (this.currentUser.role !== 'admin' && !(perms.schedule && perms.schedule.edit)) return this.showToast('권한이 없습니다.', true);
+
+            const id = this.elements.scheduleId.value || `sch_${Date.now()}`;
+            const isUpdate = !!this.elements.scheduleId.value;
+            const vehicleName = this.state.vehicles.find(v => v.id === this.elements.scheduleVehicle.value)?.data['차량명'] || 'Unknown Vehicle';
+            
+            const scheduleData = {
+                id, vehicleId: this.elements.scheduleVehicle.value, title: this.elements.scheduleTitle.value,
+                startDate: new Date(this.elements.scheduleStartDate.value), endDate: new Date(this.elements.scheduleEndDate.value),
+                type: this.elements.scheduleType.value, department: this.elements.scheduleDepartment.value,
+                driver: this.elements.scheduleDriver.value, requester: this.elements.scheduleRequester.value,
+                isLoaded: this.elements.scheduleLoadStatus.checked,
+            };
+
+            if (scheduleData.endDate < scheduleData.startDate) return this.showToast('종료일은 시작일보다 빠를 수 없습니다.', true);
+
+            const existingIndex = this.state.schedules.findIndex(s => s.id === id);
+            if (existingIndex > -1) this.state.schedules[existingIndex] = scheduleData;
+            else this.state.schedules.push(scheduleData);
+            
+            this.logActivity(isUpdate ? 'UPDATE_SCHEDULE' : 'CREATE_SCHEDULE', `${isUpdate ? 'Updated' : 'Created'} schedule '${scheduleData.title}' for ${vehicleName}.`);
+            this.saveData();
+            this.renderAll();
+            this.closeModal('scheduleModal');
+            this.showToast('일정이 저장되었습니다.');
+        },
+
+        handleDeleteSchedule() {
+            const id = this.elements.scheduleId.value;
+            const perms = this.currentUser.permissions || {};
+            if (this.currentUser.role !== 'admin' && !(perms.schedule && perms.schedule.edit)) return this.showToast('권한이 없습니다.', true);
+            
+            this.showConfirmationModal(
+                '일정 삭제',
+                '이 일정을 정말로 삭제하시겠습니까?',
+                () => {
+                    const schedule = this.state.schedules.find(s => s.id === id);
+                    this.state.schedules = this.state.schedules.filter(s => s.id !== id);
+                    this.logActivity('DELETE_SCHEDULE', `Deleted schedule '${schedule.title}' (ID: ${id}).`);
+                    this.saveData();
+                    this.renderAll();
+                    this.closeModal('scheduleModal');
+                    this.showToast('일정이 삭제되었습니다.');
+                }
+            );
+        },
+
+        updateScheduleFormOptions() {
+            this.elements.scheduleVehicle.innerHTML = this.state.vehicles.map(v => `<option value="${v.id}">${v.data['차량명']}</option>`).join('');
+            this.elements.scheduleDepartment.innerHTML = this.state.departments.map(d => `<option value="${d.name}">${d.name}</option>`).join('');
+        },
+        
+        // Department
+        renderDepartmentList() {
+            this.elements.departmentList.innerHTML = this.state.departments.map((dep, index) => `
+                <div class="flex items-center justify-between p-2 border rounded-md">
+                    <div class="flex items-center">
+                        <span class="w-5 h-5 rounded-full mr-3" style="background-color: ${dep.color};"></span>
+                        <span>${dep.name}</span>
+                    </div>
+                    <button data-index="${index}" class="text-red-500 hover:text-red-700 delete-department-btn">&times;</button>
+                </div>
+            `).join('');
+            
+            document.querySelectorAll('.delete-department-btn').forEach(btn => btn.addEventListener('click', (e) => this.handleDeleteDepartment(e.target.dataset.index)));
+        },
+        
+        handleAddDepartment() {
+            const perms = this.currentUser.permissions || {};
+            if (this.currentUser.role !== 'admin' && !(perms.schedule && perms.schedule.edit)) return this.showToast('권한이 없습니다.', true);
+
+            const name = this.elements.newDepartmentName.value.trim();
+            const color = this.elements.newDepartmentColor.value;
+            if (name && !this.state.departments.some(d => d.name === name)) {
+                this.state.departments.push({ name, color });
+                this.logActivity('CREATE_DEPARTMENT', `Created department '${name}'.`);
+                this.saveData();
+                this.renderDepartmentList();
+                this.updateScheduleFormOptions();
+                this.elements.newDepartmentName.value = '';
+            } else this.showToast('부서명이 비어있거나 이미 존재합니다.', true);
+        },
+
+        handleDeleteDepartment(index) {
+            const perms = this.currentUser.permissions || {};
+            if (this.currentUser.role !== 'admin' && !(perms.schedule && perms.schedule.edit)) return this.showToast('권한이 없습니다.', true);
+            
+            const departmentName = this.state.departments[index].name;
+            this.showConfirmationModal(
+                '부서 삭제',
+                `'${departmentName}' 부서를 정말로 삭제하시겠습니까?`,
+                () => {
+                    this.state.departments.splice(index, 1);
+                    this.logActivity('DELETE_DEPARTMENT', `Deleted department '${departmentName}'.`);
+                    this.saveData();
+                    this.renderDepartmentList();
+                    this.updateScheduleFormOptions();
+                }
+            );
+        },
+
+        // --- VEHICLE DB ---
+        renderVehicleDBList() {
+            this.elements.vehicleDbList.innerHTML = this.state.vehicles.map(v => `
+                <tr class="bg-white border-b hover:bg-gray-50 cursor-pointer">
+                    <td class="w-4 p-4"><input type="checkbox" class="vehicle-checkbox" data-id="${v.id}"></td>
+                    <td class="px-6 py-4 font-medium text-gray-900" data-id="${v.id}">${v.data['차량명']}</td>
+                    <td class="px-6 py-4" data-id="${v.id}">${v.data['Engine_Model'] || ''}</td>
+                    <td class="px-6 py-4" data-id="${v.id}">${v.data['TM_Model'] || ''}</td>
+                    <td class="px-6 py-4" data-id="${v.id}">${v.data['Weight_GVW'] || ''}</td>
+                    <td class="px-6 py-4" data-id="${v.id}">${v.data['RR_Axle_Capacity'] || ''}</td>
+                    <td class="px-6 py-4 text-xs">${new Date(v.createdAt).toLocaleString()}</td>
+                    <td class="px-6 py-4 text-xs">${new Date(v.updatedAt).toLocaleString()}</td>
+                </tr>
+            `).join('');
+            this.elements.vehicleDbList.querySelectorAll('td:not(:first-child)').forEach(cell => cell.addEventListener('click', (e) => this.showVehicleDetails(e.currentTarget.dataset.id)));
+        },
+        
+        openVehicleForm(vehicleId = null) {
+            this.elements.vehicleForm.reset();
+            this.elements.vehicleId.value = '';
+            if (vehicleId) {
+                const vehicle = this.state.vehicles.find(v => v.id === vehicleId);
+                this.elements.vehicleFormTitle.textContent = '차량 정보 수정';
+                this.elements.vehicleId.value = vehicle.id;
+                for (const [key, value] of Object.entries(vehicle.data)) {
+                    const input = this.elements.vehicleForm.querySelector(`[name="${key}"]`);
+                    if (input) input.value = value;
+                }
+            } else this.elements.vehicleFormTitle.textContent = '차량 등록';
+            this.openModal('vehicleFormModal');
+        },
+        
+        handleSaveVehicle() {
+            const perms = this.currentUser.permissions || {};
+            if (this.currentUser.role !== 'admin' && !(perms.vehicleDb && perms.vehicleDb.edit)) return this.showToast('권한이 없습니다.', true);
+
+            const formData = new FormData(this.elements.vehicleForm);
+            const data = {};
+            for (const [key, value] of formData.entries()) data[key] = value;
+
+            if (!data['차량명']) return this.showToast('차량명은 필수 항목입니다.', true);
+            
+            let id = this.elements.vehicleId.value;
+            const now = new Date();
+            const isUpdate = !!id;
+            
+            if (id) {
+                const vehicle = this.state.vehicles.find(v => v.id === id);
+                vehicle.data = data; vehicle.updatedAt = now; vehicle.modifiedBy = this.currentUser.id;
+            } else {
+                id = `veh_${Date.now()}`;
+                this.state.vehicles.push({ id, data, createdAt: now, updatedAt: now, createdBy: this.currentUser.id, modifiedBy: this.currentUser.id });
+            }
+            this.logActivity(isUpdate ? 'UPDATE_VEHICLE' : 'CREATE_VEHICLE', `${isUpdate ? 'Updated' : 'Created'} vehicle '${data['차량명']}'.`);
+            this.saveData();
+            this.renderAll();
+            this.closeModal('vehicleFormModal');
+            this.showToast('차량 정보가 저장되었습니다.');
+        },
+        
+        showVehicleDetails(vehicleId) {
+            const vehicle = this.state.vehicles.find(v => v.id === vehicleId);
+            if (!vehicle) return;
+            
+            let contentHtml = '<div class="grid grid-cols-2 gap-x-8 gap-y-2 text-sm">';
+            for(const [key, value] of Object.entries(vehicle.data)) contentHtml += `<div><strong class="font-medium text-gray-500">${key.replace(/_/g, ' ')}:</strong> ${value || '-'}</div>`;
+            contentHtml += '</div>';
+
+            this.elements.vehicleDetailsContent.innerHTML = contentHtml;
+            this.elements.vehicleCreatorInfo.textContent = `등록: ${vehicle.createdBy} (${new Date(vehicle.createdAt).toLocaleString()})`;
+            this.elements.vehicleModifierInfo.textContent = `수정: ${vehicle.modifiedBy} (${new Date(vehicle.updatedAt).toLocaleString()})`;
+            this.elements.editVehicleFromPopupBtn.dataset.id = vehicleId;
+            this.openModal('vehicleDetailsPopup');
+        },
+
+        handleEditVehicleFromPopup() {
+            const vehicleId = this.elements.editVehicleFromPopupBtn.dataset.id;
+            this.closeModal('vehicleDetailsPopup');
+            this.openVehicleForm(vehicleId);
+        },
+
+        handleSelectAllVehicles(event) {
+            this.elements.vehicleDbList.querySelectorAll('.vehicle-checkbox').forEach(checkbox => checkbox.checked = event.target.checked);
+        },
+        
+        handleDeleteSelectedVehicles() {
+            const perms = this.currentUser.permissions || {};
+            if (this.currentUser.role !== 'admin' && !(perms.vehicleDb && perms.vehicleDb.edit)) return this.showToast('권한이 없습니다.', true);
+
+            const selectedIds = Array.from(this.elements.vehicleDbList.querySelectorAll('.vehicle-checkbox:checked')).map(cb => cb.dataset.id);
+            if (selectedIds.length === 0) return this.showToast('삭제할 차량을 선택하세요.', true);
+            
+            this.showConfirmationModal(
+                '차량 삭제',
+                `선택된 ${selectedIds.length}개의 차량을 정말로 삭제하시겠습니까?<br>관련된 모든 일정과 운행일지도 함께 삭제됩니다.`,
+                () => {
+                    const deletedVehicleNames = [];
+                    this.state.vehicles = this.state.vehicles.filter(v => {
+                        if (selectedIds.includes(v.id)) {
+                            deletedVehicleNames.push(v.data['차량명']);
+                            return false;
+                        }
+                        return true;
+                    });
+                    this.state.schedules = this.state.schedules.filter(s => !selectedIds.includes(s.vehicleId));
+                    this.state.drivingLogs = this.state.drivingLogs.filter(log => !selectedIds.includes(log.vehicleId));
+                    
+                    this.logActivity('DELETE_VEHICLE', `Deleted ${selectedIds.length} vehicles: ${deletedVehicleNames.join(', ')}.`);
+                    this.saveData();
+                    this.renderAll();
+                    this.elements.selectAllVehicles.checked = false;
+                    this.showToast(`${selectedIds.length}개의 차량이 삭제되었습니다.`);
+                }
+            );
+        },
+
+        exportVehicles(selectedOnly) {
+            let vehiclesToExp = this.state.vehicles;
+            if (selectedOnly) {
+                const selectedIds = Array.from(this.elements.vehicleDbList.querySelectorAll('.vehicle-checkbox:checked')).map(cb => cb.dataset.id);
+                if (selectedIds.length === 0) return this.showToast('내보낼 차량을 선택하세요.', true);
+                vehiclesToExp = this.state.vehicles.filter(v => selectedIds.includes(v.id));
+            }
+            const dataStr = JSON.stringify(vehiclesToExp, null, 2);
+            const blob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'vehicles.json';
+            a.click();
+            URL.revokeObjectURL(url);
+        },
+        
+        importVehicles(event) {
+            const perms = this.currentUser.permissions || {};
+            if (this.currentUser.role !== 'admin' && !(perms.vehicleDb && perms.vehicleDb.edit)) {
+                event.target.value = '';
+                return this.showToast('권한이 없습니다.', true);
+            }
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const importedVehicles = JSON.parse(e.target.result);
+                    if (!Array.isArray(importedVehicles)) throw new Error();
+                    let importedCount = 0;
+                    importedVehicles.forEach(v => {
+                        if (v.id && v.data) {
+                           const existing = this.state.vehicles.find(ex => ex.id === v.id);
+                           if (!existing) {
+                               this.state.vehicles.push(v);
+                               importedCount++;
+                           }
+                        }
+                    });
+                    this.logActivity('IMPORT_VEHICLE', `Imported ${importedCount} new vehicles.`);
+                    this.saveData();
+                    this.renderAll();
+                    this.showToast(`${importedCount}개의 차량 정보를 불러왔습니다.`);
+                } catch (error) { this.showToast('차량 정보 불러오기에 실패했습니다.', true); } 
+                finally { event.target.value = ''; }
+            };
+            reader.readAsText(file);
+        },
+
+        renderLoadVehicleList() {
+             this.elements.loadVehicleList.innerHTML = this.state.vehicles.map(v => `
+                <tr class="bg-white border-b hover:bg-gray-50 cursor-pointer" data-id="${v.id}">
+                    <td class="px-6 py-4 font-medium text-gray-900">${v.data['차량명']}</td>
+                    <td class="px-6 py-4">${v.data['Engine_Model'] || ''}</td>
+                    <td class="px-6 py-4">${v.data['TM_Model'] || ''}</td>
+                    <td class="px-6 py-4">${v.data['Weight_GVW'] || ''}</td>
+                    <td class="px-6 py-4">${v.data['RR_Axle_Capacity'] || ''}</td>
+                </tr>
+            `).join('');
+            this.elements.loadVehicleList.querySelectorAll('tr').forEach(row => row.addEventListener('click', (e) => this.handleLoadVehicleData(e.currentTarget.dataset.id)));
+        },
+
+        handleLoadVehicleData(vehicleId) {
+            const vehicle = this.state.vehicles.find(v => v.id === vehicleId);
+            if(vehicle) {
+                for (const [key, value] of Object.entries(vehicle.data)) {
+                    const input = this.elements.vehicleForm.querySelector(`[name="${key}"]`);
+                    if (input && key !== '차량명') input.value = value;
+                }
+                this.closeModal('loadVehicleModal');
+                this.showToast(`'${vehicle.data['차량명']}' 차량 정보를 불러왔습니다.`);
+            }
+        },
+
+        // --- DRIVING LOG ---
+        renderLogVehicleOptions() {
+            this.elements.logVehicleSelect.innerHTML = this.state.vehicles.map(v => `<option value="${v.id}">${v.data['차량명']}</option>`).join('');
+        },
+        
+        renderLogCalendar() {
+            const container = this.elements.logCalendarContainer;
+            const date = this.state.logCalendarDate;
+            const year = date.getFullYear();
+            const month = date.getMonth();
+            const monthName = `${year}년 ${month + 1}월`;
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+            const firstDayOfMonth = new Date(year, month, 1).getDay();
+
+            let calendarHTML = `
+                <div class="flex justify-between items-center mb-4">
+                    <button id="log-prev-month" class="px-2 py-1 border rounded">&lt;</button>
+                    <h3 class="font-bold">${monthName}</h3>
+                    <button id="log-next-month" class="px-2 py-1 border rounded">&gt;</button>
+                </div>
+                <div class="grid grid-cols-7 gap-1 text-center text-xs font-bold"><div>일</div><div>월</div><div>화</div><div>수</div><div>목</div><div>금</div><div>토</div></div>
+                <div class="grid grid-cols-7 gap-1 mt-2 text-sm">`;
+            for (let i = 0; i < firstDayOfMonth; i++) calendarHTML += '<div></div>';
+            for (let day = 1; day <= daysInMonth; day++) {
+                const fullDate = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                const hasLog = this.state.drivingLogs.some(log => log.date === fullDate && log.vehicleId === this.elements.logVehicleSelect.value);
+                calendarHTML += `<div data-date="${fullDate}" class="log-day p-2 border rounded cursor-pointer hover:bg-blue-100 ${hasLog ? 'bg-green-200' : ''}">${day}</div>`;
+            }
+            calendarHTML += '</div>'; container.innerHTML = calendarHTML;
+            container.querySelector('#log-prev-month').addEventListener('click', () => { this.state.logCalendarDate.setMonth(month - 1); this.renderLogCalendar(); });
+            container.querySelector('#log-next-month').addEventListener('click', () => { this.state.logCalendarDate.setMonth(month + 1); this.renderLogCalendar(); });
+            container.querySelectorAll('.log-day').forEach(dayEl => dayEl.addEventListener('click', () => this.showDrivingLogForDate(dayEl.dataset.date)));
+        },
+        
+        showDrivingLogForDate(date) {
+            const vehicleId = this.elements.logVehicleSelect.value;
+            if (!vehicleId) return this.showToast('차량을 먼저 선택해주세요.', true);
+            
+            this.elements.logDateDisplay.textContent = date;
+            this.elements.drivingLogForm.classList.remove('hidden');
+            this.elements.logNoData.classList.add('hidden');
+            this.elements.drivingLogForm.reset();
+
+            const log = this.state.drivingLogs.find(l => l.vehicleId === vehicleId && l.date === date);
+            this.elements.logId.value = log ? log.id : '';
+            this.elements.logDate.value = date;
+            
+            if (log) {
+                for (const key in log.data) {
+                    const el = document.getElementById(`log-${key.replace(/([A-Z])/g, "-$1").toLowerCase()}`);
+                    if (el) el.type === 'checkbox' ? el.checked = log.data[key] : el.value = log.data[key];
+                }
+            }
+        },
+        
+        handleSaveDrivingLog(e) {
+            e.preventDefault();
+            const perms = this.currentUser.permissions || {};
+            if (this.currentUser.role !== 'admin' && !(perms.drivingLog && perms.drivingLog.edit)) return this.showToast('권한이 없습니다.', true);
+
+            const vehicleId = this.elements.logVehicleSelect.value;
+            const date = this.elements.logDate.value;
+            let id = this.elements.logId.value || `log_${vehicleId}_${date}`;
+            const isUpdate = !!this.elements.logId.value;
+            
+            const logData = {};
+            this.elements.drivingLogForm.querySelectorAll('input, textarea').forEach(el => {
+                if (el.id && el.id.startsWith('log-')) {
+                    const key = el.id.substring(4).replace(/-(\w)/g, (m, g) => g.toUpperCase());
+                    if (el.type === 'checkbox') logData[key] = el.checked;
+                    else if (el.type === 'number') logData[key] = parseFloat(el.value) || 0;
+                    else logData[key] = el.value;
+                }
+            });
+            delete logData['id']; delete logData['date'];
+
+            const existingIndex = this.state.drivingLogs.findIndex(l => l.id === id);
+            if (existingIndex > -1) this.state.drivingLogs[existingIndex].data = logData;
+            else this.state.drivingLogs.push({ id, vehicleId, date, data: logData });
+
+            this.logActivity(isUpdate ? 'UPDATE_DRIVING_LOG' : 'CREATE_DRIVING_LOG', `${isUpdate ? 'Updated' : 'Created'} driving log for date ${date}.`);
+            this.saveData();
+            this.renderLogCalendar();
+            this.showToast('운행일지가 저장되었습니다.');
+        },
+        
+        calculateDrivenKm() {
+            const start = parseFloat(this.elements.logStartKm.value) || 0;
+            const end = parseFloat(this.elements.logEndKm.value) || 0;
+            this.elements.logDrivenKm.value = end > start ? end - start : 0;
+        },
+
+        exportDrivingLogs() {
+            const dataStr = JSON.stringify(this.state.drivingLogs, null, 2);
+            const blob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a'); a.href = url; a.download = 'driving_logs.json'; a.click();
+            URL.revokeObjectURL(url);
+        },
+
+        importDrivingLogs(event) {
+            const perms = this.currentUser.permissions || {};
+            if (this.currentUser.role !== 'admin' && !(perms.drivingLog && perms.drivingLog.edit)) {
+                event.target.value = '';
+                return this.showToast('권한이 없습니다.', true);
+            }
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const importedLogs = JSON.parse(e.target.result);
+                    if (!Array.isArray(importedLogs)) throw new Error();
+                    let importedCount = 0;
+                    importedLogs.forEach(log => {
+                        if (log.id && log.vehicleId && log.date && log.data) {
+                           const existingIndex = this.state.drivingLogs.findIndex(ex => ex.id === log.id);
+                           if (existingIndex > -1) this.state.drivingLogs[existingIndex] = log;
+                           else {
+                               this.state.drivingLogs.push(log);
+                               importedCount++;
+                           }
+                        }
+                    });
+                    this.logActivity('IMPORT_DRIVING_LOG', `Imported/updated ${importedLogs.length} driving logs.`);
+                    this.saveData();
+                    this.renderLogCalendar();
+                    this.showToast('운행일지를 불러왔습니다.');
+                } catch (error) { this.showToast('운행일지 불러오기에 실패했습니다.', true); } 
+                finally { event.target.value = ''; }
+            };
+            reader.readAsText(file);
+        },
+
+        // --- USER & PASSWORD & LOGS ---
+        handleChangePassword(e) {
+            e.preventDefault();
+            const currentPw = this.elements.currentPassword.value, newPw = this.elements.newPassword.value, confirmPw = this.elements.confirmPassword.value;
+            const errorDiv = this.elements.pwChangeError;
+            errorDiv.classList.add('hidden');
+            
+            if (this.currentUser.pw !== currentPw) { errorDiv.textContent = '현재 비밀번호가 일치하지 않습니다.'; errorDiv.classList.remove('hidden'); return; }
+            if (newPw.length < 4) { errorDiv.textContent = '새 비밀번호는 4자 이상이어야 합니다.'; errorDiv.classList.remove('hidden'); return; }
+            if (newPw !== confirmPw) { errorDiv.textContent = '새 비밀번호가 일치하지 않습니다.'; errorDiv.classList.remove('hidden'); return; }
+
+            this.logActivity('UPDATE_PASSWORD', `User '${this.currentUser.id}' changed their password.`);
+            this.currentUser.pw = newPw;
+            const userInState = this.state.users.find(u => u.id === this.currentUser.id);
+            userInState.pw = newPw;
+            
+            this.saveData();
+            this.closeModal('changePwModal');
+            this.showToast('비밀번호가 변경되었습니다.');
+        },
+        
+        renderUserList() {
+            this.elements.userList.innerHTML = this.state.users.map(u => {
+                const perms = u.permissions || {};
+                const isUser = u.role === 'user';
+                const getPermText = (permName) => {
+                    const p = perms[permName] || {};
+                    if (p.edit) return { text: '편집', color: 'bg-green-500'};
+                    if (p.view) return { text: '보기', color: 'bg-blue-500'};
+                    return { text: '없음', color: 'bg-gray-300'};
+                };
+                const dbPerm = getPermText('vehicleDb'), logPerm = getPermText('drivingLog'), schedulePerm = getPermText('schedule');
+
+                return `
+                <tr class="border-b">
+                    <td class="px-4 py-2">${u.id}</td>
+                    <td class="px-4 py-2">${u.role}</td>
+                    <td class="px-4 py-2 text-xs">
+                        ${isUser ? `<span title="차량DB" class="${dbPerm.color} text-white text-xs font-medium mr-2 px-2.5 py-0.5 rounded">${dbPerm.text}</span>
+                        <span title="운행일지" class="${logPerm.color} text-white text-xs font-medium mr-2 px-2.5 py-0.5 rounded">${logPerm.text}</span>
+                        <span title="운행현황" class="${schedulePerm.color} text-white text-xs font-medium mr-2 px-2.5 py-0.5 rounded">${schedulePerm.text}</span>`
+                         : (u.role === 'admin' ? '모든 권한' : '없음')}
+                    </td>
+                    <td class="px-4 py-2">
+                        ${isUser ? `<button class="text-blue-600 hover:underline text-xs edit-user-btn" data-id="${u.id}">권한수정</button>` : ''}
+                        ${u.id !== 'admin' ? `
+                            <button class="text-red-600 hover:underline text-xs delete-user-btn ml-2" data-id="${u.id}">삭제</button>
+                            <button class="text-green-600 hover:underline text-xs reset-pw-btn ml-2" data-id="${u.id}">비밀번호 초기화</button>
+                        ` : ''}
+                    </td>
+                </tr>
+            `}).join('');
+
+            this.elements.userList.querySelectorAll('.delete-user-btn').forEach(btn => btn.addEventListener('click', (e) => this.handleDeleteUser(e.target.dataset.id)));
+            this.elements.userList.querySelectorAll('.edit-user-btn').forEach(btn => btn.addEventListener('click', (e) => this.openEditUserModal(e.target.dataset.id)));
+            this.elements.userList.querySelectorAll('.reset-pw-btn').forEach(btn => btn.addEventListener('click', (e) => this.handleResetPassword(e.target.dataset.id)));
+        },
+
+        handleAddNewUser(e) {
+            e.preventDefault();
+            const id = this.elements.newUserId.value.trim(), pw = this.elements.newUserPw.value, role = this.elements.newUserRole.value;
+            if (!id || !pw) return this.showToast('ID와 비밀번호를 모두 입력해주세요.', true);
+            if (this.state.users.some(u => u.id === id)) return this.showToast('이미 존재하는 ID입니다.', true);
+            
+            const newUser = { id, pw, role };
+            if (role === 'user') {
+                newUser.permissions = {};
+                ['vehicleDb', 'drivingLog', 'schedule'].forEach(perm => {
+                    const viewChecked = this.elements.newUserPermissions.querySelector(`input[data-perm="${perm}"][data-type="view"]`).checked;
+                    const editChecked = this.elements.newUserPermissions.querySelector(`input[data-perm="${perm}"][data-type="edit"]`).checked;
+                    newUser.permissions[perm] = { view: viewChecked || editChecked, edit: editChecked };
+                });
+            }
+            this.state.users.push(newUser);
+            this.logActivity('CREATE_USER', `Created new user '${id}' with role '${role}'.`);
+            this.saveData();
+            this.renderUserList();
+            this.elements.newUserForm.reset();
+            this.elements.newUserPermissions.querySelectorAll('input[data-type="view"]').forEach(cb => cb.disabled = false);
+        },
+        
+        handleDeleteUser(id) {
+            this.showConfirmationModal(
+                '사용자 삭제',
+                `사용자 '${id}' 계정을 정말로 삭제하시겠습니까?`,
+                () => {
+                    this.state.users = this.state.users.filter(u => u.id !== id);
+                    this.logActivity('DELETE_USER', `Deleted user '${id}'.`);
+                    this.saveData();
+                    this.renderUserList();
+                }
+            );
+        },
+
+        handleResetPassword(id) {
+            const user = this.state.users.find(u => u.id === id);
+            if (!user || user.role === 'admin') return;
+
+            const newPassword = '0000'; // 기본 초기화 비밀번호
+            this.showConfirmationModal(
+                '비밀번호 초기화',
+                `사용자 '${id}'의 비밀번호를 '${newPassword}'로 초기화하시겠습니까?`,
+                () => {
+                    user.pw = newPassword;
+                    this.logActivity('RESET_PASSWORD', `Reset password for user '${id}'.`);
+                    this.saveData();
+                    this.showToast(`'${id}' 사용자의 비밀번호가 '${newPassword}'로 초기화되었습니다.`);
+                }
+            );
+        },
+
+        openEditUserModal(userId) {
+            const user = this.state.users.find(u => u.id === userId);
+            if (!user || user.role !== 'user') return;
+            this.elements.editUserId.value = userId;
+            this.elements.editUserIdDisplay.textContent = userId;
+            const perms = user.permissions || {};
+            this.elements.editUserPermissions.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+                const permName = cb.dataset.perm, permType = cb.dataset.type;
+                const permData = perms[permName] || { view: false, edit: false };
+                cb.checked = permData[permType];
+                const viewCheckbox = this.elements.editUserPermissions.querySelector(`input[data-perm="${permName}"][data-type="view"]`);
+                viewCheckbox.disabled = permData.edit;
+            });
+            this.openModal('editUserModal');
+        },
+
+        handleUpdateUser(e) {
+            e.preventDefault();
+            const userId = this.elements.editUserId.value;
+            const user = this.state.users.find(u => u.id === userId);
+            if (!user) return;
+            user.permissions = {};
+            ['vehicleDb', 'drivingLog', 'schedule'].forEach(perm => {
+                const viewChecked = this.elements.editUserPermissions.querySelector(`input[data-perm="${perm}"][data-type="view"]`).checked;
+                const editChecked = this.elements.editUserPermissions.querySelector(`input[data-perm="${perm}"][data-type="edit"]`).checked;
+                user.permissions[perm] = { view: viewChecked || editChecked, edit: editChecked };
+            });
+            this.logActivity('UPDATE_USER', `Updated permissions for user '${userId}'.`);
+            this.saveData();
+            this.renderUserList();
+            this.closeModal('editUserModal');
+            this.showToast(`'${userId}' 사용자의 권한이 수정되었습니다.`);
+        },
+        
+        renderActivityLog() {
+            if (!this.elements.activityLogList) return;
+            this.elements.activityLogList.innerHTML = this.state.activityLogs.map(log => `
+                <tr class="border-b bg-white hover:bg-gray-50">
+                    <td class="px-6 py-4 text-xs">${new Date(log.timestamp).toLocaleString()}</td>
+                    <td class="px-6 py-4 font-medium">${log.userId}</td>
+                    <td class="px-6 py-4"><span class="bg-gray-200 text-gray-800 text-xs font-medium px-2.5 py-0.5 rounded">${log.action}</span></td>
+                    <td class="px-6 py-4">${log.details}</td>
+                </tr>
+            `).join('');
+        },
+
+        handleClearLogs() {
+            if (this.currentUser.role !== 'admin') return;
+            this.showConfirmationModal(
+                '로그 비우기',
+                '모든 활동 로그를 영구적으로 삭제하시겠습니까?<br>이 작업은 되돌릴 수 없습니다.',
+                () => {
+                    this.logActivity('CLEAR_LOGS', `All activity logs were cleared by user '${this.currentUser.id}'.`);
+                    this.state.activityLogs = [this.state.activityLogs[0]]; // 방금 생성된 로그만 남김
+                    this.saveData();
+                    this.renderActivityLog();
+                    this.showToast('활동 로그가 모두 삭제되었습니다.');
+                }
+            );
+        }
+    };
+
+    App.init();
+});
+</script>
+
+</body>
+</html>
+
