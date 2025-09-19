@@ -11,7 +11,6 @@
         .modal-bg { background-color: rgba(0,0,0,0.5); display: flex; }
         .calendar-grid {
             display: grid;
-            /* grid-template-columns is set dynamically via inline style */
             gap: 1px;
         }
         .progress-bar-container {
@@ -30,13 +29,12 @@
             font-size: 12px;
             cursor: pointer;
             transition: all 0.2s ease-in-out;
-            z-index: 5; /* Ensure progress bar is on top of other cells */
+            z-index: 5;
         }
         .progress-bar:hover {
             transform: scale(1.02);
             box-shadow: 0 4px 8px rgba(0,0,0,0.2);
         }
-        /* Tooltip styles are now handled by the global tooltip div */
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         @keyframes scale-in {
@@ -49,8 +47,9 @@
 <body class="bg-gray-100 text-gray-800">
 
     <!-- 로그인 화면 -->
-    <div id="login-screen" class="min-h-screen flex items-center justify-center bg-gray-900">
-        <div class="bg-white p-8 rounded-lg shadow-2xl w-full max-w-md">
+    <div id="login-screen" class="min-h-screen flex items-center justify-center bg-cover bg-center" style="background-image: url('라인업.jpg');">
+        <div class="absolute inset-0 bg-black opacity-50"></div> <!-- 이미지 위에 어두운 오버레이 추가 -->
+        <div class="bg-white/90 backdrop-blur-sm p-8 rounded-lg shadow-2xl w-full max-w-md z-10">
             <h1 class="text-3xl font-bold mb-2 text-center text-gray-800">차량 관리 시스템</h1>
             <p class="text-gray-500 mb-6 text-center">로그인이 필요합니다.</p>
             <div id="login-error" class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4 hidden" role="alert">
@@ -65,7 +64,7 @@
     </div>
 
     <!-- 메인 앱 화면 -->
-    <div id="main-app" class="hidden">
+    <div id="main-app" class="hidden flex flex-col min-h-screen">
         <header class="bg-white shadow-md p-4 flex justify-between items-center sticky top-0 z-20">
             <h1 class="text-2xl font-bold text-gray-800">차량 운행 관리</h1>
             <div class="flex items-center space-x-2">
@@ -83,7 +82,7 @@
             </div>
         </header>
 
-        <main class="p-4 md:p-6 lg:p-8 space-y-6">
+        <main class="flex-grow p-4 md:p-6 lg:p-8 space-y-6">
             <!-- 차량 사용현황 신호등 -->
             <section id="traffic-light-section">
                 <h2 class="text-xl font-semibold mb-3">차량 사용현황</h2>
@@ -109,6 +108,15 @@
                 </div>
             </section>
         </main>
+        
+        <footer class="text-center py-4 bg-gray-100">
+            <div class="flex flex-col items-center">
+                <img src="TDM 로고.png" alt="TDM 로고" class="h-10 mb-2">
+                <p class="text-xs text-gray-500">
+                    Developed by Jinyoung(Gabriel) Park with Google Gemini
+                </p>
+            </div>
+        </footer>
     </div>
 
     <!-- 각종 모달 -->
@@ -831,11 +839,13 @@ document.addEventListener('DOMContentLoaded', () => {
             sessionStorage.removeItem('vms_currentUser');
             this.elements.loginScreen.style.display = 'flex';
             this.elements.mainApp.classList.add('hidden');
+            this.elements.mainApp.classList.remove('flex');
         },
 
         showMainApp() {
             this.elements.loginScreen.style.display = 'none';
             this.elements.mainApp.classList.remove('hidden');
+            this.elements.mainApp.classList.add('flex');
             this.elements.currentUserDisplay.textContent = `${this.currentUser.id} (${this.currentUser.role})님`;
             this.updatePermissions();
             this.renderAll();
@@ -879,7 +889,7 @@ document.addEventListener('DOMContentLoaded', () => {
             setButtonState(this.elements.activityLogBtn, isAdmin);
             setButtonState(this.elements.vehicleDbMgmtBtn, isAdmin || (role === 'user' && perms.vehicleDb && perms.vehicleDb.view));
             setButtonState(this.elements.drivingLogMgmtBtn, isAdmin || (role === 'user' && perms.drivingLog && perms.drivingLog.view));
-            setButtonState(this.elements.scheduleMgmtBtn, isAdmin || (role === 'user' && perms.schedule && perms.schedule.edit));
+            setButtonState(this.elements.scheduleMgmtBtn, isAdmin || (role === 'user' && perms.schedule && perms.schedule.view));
             setButtonState(this.elements.saveAllBtn, isAdmin);
             setButtonState(this.elements.loadAllInput.parentElement, isAdmin);
             setButtonState(this.elements.changePwBtn, !isGuest);
@@ -928,6 +938,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     { name: '제동', color: '#8B5CF6' },
                 ];
                 this.state.activityLogs = [];
+                this.state.vehicles = [];
+                this.state.schedules = [];
+                this.state.drivingLogs = [];
                 this.saveData();
             }
         },
@@ -1054,7 +1067,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
 
-            let headerHtml = '<div class="font-semibold bg-gray-100 p-2 text-center sticky left-0 z-10 flex items-center justify-center">차량</div>';
+            let headerHtml = '<div class="font-semibold bg-gray-100 p-2 text-center sticky left-0 z-10 flex items-center justify-center min-w-[150px]">차량</div>';
             const daysOfWeek = ['일', '월', '화', '수', '목', '금', '토'];
             dates.forEach(d => {
                 headerHtml += `<div class="font-semibold bg-gray-100 p-1 text-center text-xs flex flex-col justify-center">
@@ -1082,7 +1095,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 cell.addEventListener('click', (e) => {
                     if (e.target !== cell) return; 
                     const perms = this.currentUser.permissions || {};
-                    if (this.currentUser.role === 'guest' || (this.currentUser.role === 'user' && !perms.schedule)) return;
+                    if (this.currentUser.role === 'guest' || (this.currentUser.role === 'user' && !(perms.schedule && perms.schedule.edit))) return;
                     this.openScheduleForm(null, cell.dataset.vehicleId, cell.dataset.date);
                 });
             });
@@ -1133,7 +1146,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         
                         bar.addEventListener('click', () => {
                              const perms = this.currentUser.permissions || {};
-                             if (this.currentUser.role === 'guest' || (this.currentUser.role === 'user' && !perms.schedule)) return;
+                             if (this.currentUser.role === 'guest' || (this.currentUser.role === 'user' && !(perms.schedule && perms.schedule.view))) return;
                              this.openScheduleForm(schedule.id)
                         });
 
@@ -1180,8 +1193,8 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             if (modalId === 'drivingLogModal') {
                 const canEdit = isAdmin || (perms.drivingLog && perms.drivingLog.edit);
-                this.elements.drivingLogForm.querySelectorAll('input, textarea').forEach(el => {
-                    if (el.id !== 'log-driven-km') el.readOnly = !canEdit;
+                this.elements.drivingLogForm.querySelectorAll('input, textarea, select').forEach(el => {
+                    if (el.id !== 'log-driven-km') el.disabled = !canEdit;
                 });
                 this.elements.drivingLogForm.querySelector('button[type="submit"]').style.display = canEdit ? 'inline-flex' : 'none';
                 this.elements.importLogInput.parentElement.style.display = canEdit ? 'inline-flex' : 'none';
@@ -1206,12 +1219,16 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // Schedule
         openScheduleForm(scheduleId = null, vehicleId = null, date = null) {
+             const perms = this.currentUser.permissions || {};
+            const canView = this.currentUser.role === 'admin' || (perms.schedule && perms.schedule.view);
+            if (!canView) return this.showToast('권한이 없습니다.', true);
+
             this.elements.scheduleForm.reset();
             this.updateScheduleFormOptions();
 
             if (scheduleId) {
                 const schedule = this.state.schedules.find(s => s.id === scheduleId);
-                this.elements.scheduleModalTitle.textContent = '일정 수정';
+                this.elements.scheduleModalTitle.textContent = '일정 수정/조회';
                 this.elements.scheduleId.value = schedule.id;
                 this.elements.scheduleVehicle.value = schedule.vehicleId;
                 this.elements.scheduleTitle.value = schedule.title;
@@ -1234,13 +1251,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 this.elements.deleteScheduleBtn.classList.add('hidden');
             }
             
-            const perms = this.currentUser.permissions || {};
             const canEdit = this.currentUser.role === 'admin' || (perms.schedule && perms.schedule.edit);
-            this.elements.scheduleForm.querySelectorAll('input, select').forEach(el => el.disabled = !canEdit);
-            this.elements.scheduleForm.querySelectorAll('button').forEach(btn => {
-                if(btn.id !== 'cancel-schedule-btn' && btn.id !== 'close-department-modal-btn') {
-                    btn.style.display = canEdit ? 'inline-flex' : 'none';
-                }
+            this.elements.scheduleForm.querySelectorAll('input, select, textarea').forEach(el => el.disabled = !canEdit);
+            this.elements.scheduleForm.querySelectorAll('button[type="submit"], #delete-schedule-btn, #manage-departments-btn').forEach(btn => {
+                btn.style.display = canEdit ? 'inline-flex' : 'none';
             });
 
             this.openModal('scheduleModal');
@@ -1422,6 +1436,11 @@ document.addEventListener('DOMContentLoaded', () => {
             this.elements.vehicleCreatorInfo.textContent = `등록: ${vehicle.createdBy} (${new Date(vehicle.createdAt).toLocaleString()})`;
             this.elements.vehicleModifierInfo.textContent = `수정: ${vehicle.modifiedBy} (${new Date(vehicle.updatedAt).toLocaleString()})`;
             this.elements.editVehicleFromPopupBtn.dataset.id = vehicleId;
+
+            const perms = this.currentUser.permissions || {};
+            const canEdit = this.currentUser.role === 'admin' || (perms.vehicleDb && perms.vehicleDb.edit);
+            this.elements.editVehicleFromPopupBtn.style.display = canEdit ? 'inline-flex' : 'none';
+
             this.openModal('vehicleDetailsPopup');
         },
 
@@ -1856,4 +1875,3 @@ document.addEventListener('DOMContentLoaded', () => {
 
 </body>
 </html>
-
